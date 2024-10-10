@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        html {
+            touch-action: manipulation;
+        }
+        body {
+            background-color: black;
+        }
+
+        body, svg {
+            font-family: "Hiragino Kaku Gothic ProN";
+            margin: 0;
+            padding: 0;
+        }
+
+        svg {
+            border: 1px solid white;
+        }
+        svg#controller {
+            border: none;
+        }
+        text {
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+<svg width="800" height="600" id="battle" display="none">
+    <text x="100" y="420" font-size="160">🟡</text>
+    <text x="600" y="200" font-size="170">🙎‍♀️</text>
+    <text x="50" y="65" fill="white" font-size="30">ピエン</text>
+    <text x="60" y="110" fill="white" font-size="30">HP:</text>
+    <line x1="40" y1="80" x2="40" y2="130" fill="white" stroke="white" stroke-width="5"></line>
+    <line x1="440" y1="130" x2="40" y2="130" fill="white" stroke="white" stroke-width="5"></line>
+    <line x1="440" y1="130" x2="395" y2="120" fill="white" stroke="white" stroke-width="5"></line>
+    <rect x="120" y="90" height="20" width="200" fill="green" stroke="white"></rect>
+    <rect x="120" y="90" height="20" width="270" fill="none" stroke="white"></rect>
+    <rect x="20" y="475" stroke="white" height="110" width="760"></rect>
+    <g id="battle-command">
+        <rect x="580" y="475" stroke="white" height="110" width="200"></rect>
+        <text x="640" y="520" fill="white" font-size="30">たたかう</text>
+        <text x="640" y="560" fill="white" font-size="30">にげる</text>
+        <text x="613" y="525" fill="white" font-size="40" text-anchor="middle" id="command-cursor">👉</text>
+    </g>
+    <g transform="translate(340, 300)">
+        <text x="60" y="65" fill="white" font-size="30">スマイリー</text>
+        <text x="70" y="110" fill="white" font-size="30">HP:</text>
+        <line x1="420" y1="80" x2="420" y2="130" fill="white" stroke="white" stroke-width="5"></line>
+        <line x1="420" y1="130" x2="30" y2="130" fill="white" stroke="white" stroke-width="5"></line>
+        <line x1="25" y1="130" x2="70" y2="120" fill="white" stroke="white" stroke-width="5"></line>
+        <rect x="130" y="90" height="20" width="270" fill="green" id="current-hp-bar"></rect>
+        <rect x="130" y="90" height="20" width="270" fill="none" id="max-hp-bar" stroke="white"></rect>
+    </g>
+</svg>
+<svg width="800" height="600" id="title" display="none">
+    <g transform="translate(0, 50)">
+        <text x="400" y="180" font-size="60" fill="white" text-anchor="middle">SVG QUEST</text>
+        <text x="320" y="280" fill="white" font-size="30">NEW GAME</text>
+        <text x="320" y="340" fill="white" font-size="30">CONTINUE</text>
+        <text x="320" y="400" fill="white" font-size="30">EXIT</text>
+        <text x="265" y="289" fill="white" font-size="50" text-anchor="middle" id="title-cursor">👉</text>
+    </g>
+    <text x="610" y="30" fill="white" font-size="20">Aキー: 決定</text>
+    <text x="610" y="60" fill="white" font-size="20">Esc: 取消・メニュー</text>
+    <text x="610" y="90" fill="white" font-size="20">方向キー: 移動</text>
+</svg>
+<svg width="800" height="600" id="field" display="none">
+    <g id="field-wrapper" transform="translate(0, 0)">
+    </g>
+    <rect x="360" y="280" fill="white" height="40" width="40" class="character"></rect>
+    <text x="360" y="315" fill="black" font-size="40" class="character direction">↓</text>
+    <text x="610" y="30" fill="black" font-size="20">Aキー: 決定</text>
+    <text x="610" y="60" fill="black" font-size="20">Esc: 取消・メニュー</text>
+    <text x="610" y="90" fill="black" font-size="20">方向キー: 移動</text>
+</svg>
+<svg width="800" height="600" id="menu" display="none" style="position: absolute; top:0; left:0">
+    <g transform="translate(0, 0)">
+        <rect x="530" y="50" width="220" height="255" stroke="white" stroke-width="5" fill="black"></rect>
+        <text x="595" y="100" fill="white" font-size="30">どうぐ</text>
+        <text x="595" y="145" fill="white" font-size="30">そうび</text>
+        <text x="595" y="190" fill="white" font-size="30">セーブ</text>
+        <text x="595" y="235" fill="white" font-size="30">タイトル</text>
+        <text x="595" y="280" fill="white" font-size="30">とじる</text>
+        <text x="568" y="105" fill="white" font-size="40" text-anchor="middle" id="menu-cursor">👉</text>
+        <svg id="inventory" display="none">
+            <rect x="350" y="120" width="400" height="300" stroke="white" stroke-width="5" fill="black"></rect>
+            <text x="415" y="170" fill="white" font-size="30" id="inventory-1"></text>
+            <text x="415" y="215" fill="white" font-size="30" id="inventory-2"></text>
+            <text x="388" y="175" fill="white" font-size="40" text-anchor="middle" id="inventory-cursor">👉</text>
+            <svg id="inventory-confirm" display="none">
+                <rect x="570" y="360" width="180" height="60" stroke="white" stroke-width="5" fill="black"></rect>
+                <text x="640" y="400" fill="white" font-size="30">つかう</text>
+                <text x="603" y="405" fill="white" font-size="40" text-anchor="middle">👉</text>
+            </svg>
+        </svg>
+    </g>
+</svg>
+<svg width="800" height="600" id="message" display="none" style="position: absolute; top:0; left: 0;">
+    <g transform="translate(0, 0)">
+        <rect x="20" y="475" stroke="white" height="110" width="760"></rect>
+        <text x="40" y="519" fill="white" font-size="30" id="message-1"></text>
+        <text x="40" y="564" fill="white" font-size="30" id="message-2"></text>
+    </g>
+</svg>
+<svg width="800" height="600" id="fader" display="block" style="position: absolute; top:0; left: 0;">
+    <rect x="0" y="0" width="800" height="600" fill="black" fill-opacity="0"></rect>
+</svg>
+<svg width="800" height="180" id="controller" display="none">
+    <circle cx="560" cy="120" r="60" fill="#8f3842" class="a"></circle>
+    <text x="544" y="135" fill="black" font-size="45" class="a">A</text>
+    <circle cx="700" cy="80" r="60" fill="#8f3842" class="Escape"></circle>
+    <text x="665" y="95" fill="black" font-size="40" class="Escape">Esc</text>
+    <rect x="50" y="63" width="80" height="80" fill="gray" class="ArrowLeft"></rect>
+    <rect x="134" y="23" width="80" height="80" fill="gray" class="ArrowUp"></rect>
+    <rect x="134" y="107" width="80" height="80" fill="gray" class="ArrowDown"></rect>
+    <rect x="218" y="63" width="80" height="80" fill="gray" class="ArrowRight"></rect>
+</svg>
+<script type="module">
+    import init, {Engine} from "./pkg/rpg_lib.js?t=202410082000";
+
+    await init();
+
+    const engine = new Engine();
+    engine.init();
+    const ws = new WebSocket("https://rust-server-956911707039.asia-northeast1.run.app/ws");
+    ws.onmessage = (message) => {
+        engine.receive_channel_message(message.data);
+    }
+    ws.onopen = () => {
+        engine.set_web_socket_instance(ws);
+    }
+    document.getElementById("controller").setAttribute('display', 'block');
+    const keys = ['a', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft'];
+    window.onkeydown = (event) => {
+        engine.keydown(event.key);
+        if (event.key === 'ArrowUp' || event.key==='ArrowDown') {
+            event.preventDefault();
+        }
+    }
+
+    keys.forEach((key) => {
+        Array.from(document.querySelectorAll(`#controller .${key}`)).forEach((element) => {
+            element.ontouchstart = () => {
+                engine.keydown(key);
+            };
+        });
+    });
+
+    function animate(step) {
+        engine.animate(step);
+        window.requestAnimationFrame(animate);
+    }
+
+    window.requestAnimationFrame(animate);
+
+</script>
+</body>
+</html>
