@@ -2,7 +2,6 @@ use crate::engine::SharedState;
 use crate::rpg::scene::field::EventType::*;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Field;
-use crate::rpg::Character;
 use crate::ws::{ChannelMessage, MessageType, PositionMessage};
 use crate::{Animation, Item, Position};
 use wasm_bindgen_test::console_log;
@@ -20,14 +19,13 @@ impl FieldState {
     pub fn move_to(
         &mut self,
         shared_state: &mut SharedState,
-        characters: &mut Vec<Character>,
         key: String,
     ) {
         let map = &mut self.maps[shared_state.map_index];
         // let start_x: i32 = characters[0].position.x;
         // let start_y: i32 = characters[0].position.y;
-        let mut x: i32 = characters[0].position.x.to_owned();
-        let mut y: i32 = characters[0].position.y.to_owned();
+        let mut x: i32 = shared_state.characters[0].position.x.to_owned();
+        let mut y: i32 = shared_state.characters[0].position.y.to_owned();
         let original_translate_x = self.wrapper_translate_x.to_owned();
         let original_translate_y = self.wrapper_translate_y.to_owned();
         match key.as_str() {
@@ -57,7 +55,7 @@ impl FieldState {
         if found_event.is_none() {
             match key.as_str() {
                 "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
-                    characters[0].position = Position::new(x, y);
+                    shared_state.characters[0].position = Position::new(x, y);
                     self.update_character_position(x, y);
                     // self.character_position = Position::new(x, y);
                     // shared_state.interrupt_animations.push(vec![Animation::create_move(start_x, start_y, x, y)]);
@@ -104,7 +102,7 @@ impl FieldState {
                     .unwrap();
                 shared_state.has_message = true;
                 let item = map.treasure_items.get(treasure_index).unwrap();
-                characters[0].inventory.push(Item::new(&item.name));
+                shared_state.characters[0].inventory.push(Item::new(&item.name));
                 shared_state
                     .interrupt_animations
                     .push(vec![Animation::create_message(format!(
@@ -120,7 +118,7 @@ impl FieldState {
             }
             MapConnection(map_connection_detail) => {
                 self.update_character_position(x, y);
-                characters[0].position = Position::new(
+                shared_state.characters[0].position = Position::new(
                     map_connection_detail.to_position.x,
                     map_connection_detail.to_position.y,
                 );
@@ -154,26 +152,25 @@ impl FieldState {
             )
             .unwrap();
     }
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>) {
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState) {
         fn init_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            characters: &mut Vec<Character>,
         ) {
             shared_state.elements.field_scene.show();
             match &mut scene.scene_type {
                 Field(field_state) => {
                     field_state.maps[shared_state.map_index].draw(shared_state);
                     field_state.update_character_position(
-                        characters[0].position.x,
-                        characters[0].position.y,
+                        shared_state.characters[0].position.x,
+                        shared_state.characters[0].position.y,
                     );
                 }
                 _ => {}
             }
 
-            if characters[0].position.x == -1 && characters[0].position.y == -1 {
-                characters[0].position = Position::new(360, 280);
+            if shared_state.characters[0].position.x == -1 && shared_state.characters[0].position.y == -1 {
+                shared_state.characters[0].position = Position::new(360, 280);
             }
 
             console_log!("init end");
@@ -182,11 +179,10 @@ impl FieldState {
     }
     pub fn create_consume_func(
         &self,
-    ) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>, String) {
+    ) -> fn(&mut Scene, &mut SharedState, String) {
         fn consume_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            characters: &mut Vec<Character>,
             key: String,
         ) {
             match &mut scene.scene_type {
@@ -205,12 +201,12 @@ impl FieldState {
                     }
                     match key.as_str() {
                         "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
-                            field_state.move_to(shared_state, characters, key.to_owned());
+                            field_state.move_to(shared_state, key.to_owned());
                             let message = PositionMessage {
                                 user_name: shared_state.user_name.to_owned(),
                                 direction: key.to_owned(),
-                                position_x: characters[0].position.x,
-                                position_y: characters[0].position.y,
+                                position_x: shared_state.characters[0].position.x,
+                                position_y: shared_state.characters[0].position.y,
                                 map_index: shared_state.requested_map_index,
                             };
                             shared_state
@@ -227,11 +223,11 @@ impl FieldState {
         }
         consume_func
     }
-    pub fn update_map(&mut self, shared_state: &mut SharedState, characters: &mut Vec<Character>) {
+    pub fn update_map(&mut self, shared_state: &mut SharedState) {
         let map = &mut self.maps[shared_state.map_index];
         map.init_treasure_box_opened(shared_state);
         map.draw(shared_state);
-        self.update_character_position(characters[0].position.x, characters[0].position.y);
+        self.update_character_position(shared_state.characters[0].position.x, shared_state.characters[0].position.y);
     }
 
     pub fn consume_channel_message(

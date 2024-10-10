@@ -15,7 +15,7 @@ pub mod scene;
 pub struct Item {
     pub name: String,
     item_type: ItemType,
-    consume_func: fn(&Item, &mut SharedState, &mut Vec<Character>),
+    consume_func: fn(&Item, &mut SharedState),
     description: String,
 }
 
@@ -32,12 +32,12 @@ impl Item {
             _ => "",
         }
         .to_string();
-        fn consume_func(item: &Item, _: &mut SharedState, characters: &mut Vec<Character>) {
+        fn consume_func(item: &Item, shared_state: &mut SharedState) {
             match &item.item_type {
                 ItemType::Consumable => match item.name.as_str() {
                     "薬草" => {
-                        characters[0].current_hp =
-                            characters[0].max_hp.min(characters[0].current_hp + 30);
+                        shared_state.characters[0].current_hp =
+                            shared_state.characters[0].max_hp.min(shared_state.characters[0].current_hp + 30);
                     }
                     _ => {}
                 },
@@ -181,6 +181,12 @@ pub fn mount() -> Engine {
         save_data: SaveData::empty(),
         online_users: vec![],
         to_send_channel_messages: vec![],
+        characters: vec![Character {
+            current_hp: 25,
+            max_hp: 80,
+            position: Position { x: -1, y: -1 },
+            inventory: vec![],
+        }],
     };
     let mut rpg_shared_state = RPGSharedState {
         user_name: user_name.to_owned(),

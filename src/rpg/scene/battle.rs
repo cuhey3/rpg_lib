@@ -1,7 +1,6 @@
 use crate::engine::SharedState;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Battle;
-use crate::rpg::Character;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::Cursor;
@@ -20,18 +19,17 @@ pub struct BattleState {
 }
 
 impl BattleState {
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>) {
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState) {
         fn init_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            characters: &mut Vec<Character>,
         ) {
             let battle_state = match &mut scene.scene_type {
                 Battle(battle_state) => battle_state,
                 _ => panic!(),
             };
             shared_state.elements.battle_scene.show();
-            let character = &characters[0];
+            let character = &shared_state.characters[0];
             let hp_percentage = character.current_hp as f64 / character.max_hp as f64;
             let max_hp_bar_width: f64 = battle_state
                 .elements
@@ -64,11 +62,10 @@ impl BattleState {
     }
     pub fn create_consume_func(
         &self,
-    ) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>, String) {
+    ) -> fn(&mut Scene, &mut SharedState, String) {
         fn consume_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            _: &mut Vec<Character>,
             key: String,
         ) {
             match &mut scene.scene_type {

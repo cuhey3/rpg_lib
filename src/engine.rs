@@ -12,7 +12,6 @@ use web_sys::{Document, WebSocket};
 
 #[wasm_bindgen]
 pub struct Engine {
-    characters: Vec<Character>,
     scenes: Vec<Scene>,
     shared_state: SharedState,
     web_socket_wrapper: WebSocketWrapper,
@@ -31,12 +30,6 @@ impl Engine {
     ) -> Engine {
         Engine {
             application_type,
-            characters: vec![Character {
-                current_hp: 25,
-                max_hp: 80,
-                position: Position { x: -1, y: -1 },
-                inventory: vec![],
-            }],
             scenes,
             shared_state,
             web_socket_wrapper,
@@ -49,7 +42,6 @@ impl Engine {
         init_func(
             &mut self.scenes[0],
             &mut self.shared_state,
-            &mut self.characters,
         );
     }
 
@@ -72,10 +64,9 @@ impl Engine {
         consume_func(
             &mut self.scenes[scene_index],
             &mut self.shared_state,
-            &mut self.characters,
             key,
         );
-        while self.shared_state.to_send_channel_messages.len() > 0 {
+        while !self.shared_state.to_send_channel_messages.is_empty() {
             let message = self.shared_state.to_send_channel_messages.remove(0);
             self.web_socket_wrapper.send_message(message);
         }
@@ -166,7 +157,6 @@ impl Engine {
         init_func(
             &mut self.scenes[scene_index],
             &mut self.shared_state,
-            &mut self.characters,
         );
     }
 
@@ -174,7 +164,7 @@ impl Engine {
         let scene = &mut self.scenes[self.shared_state.scene_index];
         match scene.scene_type {
             Field(ref mut field_state) => {
-                field_state.update_map(&mut self.shared_state, &mut self.characters);
+                field_state.update_map(&mut self.shared_state);
             }
             _ => {}
         }
@@ -255,23 +245,24 @@ pub struct SharedState {
     pub treasure_box_opened: Vec<Vec<usize>>,
     pub save_data: SaveData,
     pub online_users: Vec<PositionMessage>,
-    pub to_send_channel_messages: Vec<String>
+    pub to_send_channel_messages: Vec<String>,
+    pub characters: Vec<Character>,
 }
 
 impl SharedState {
-    pub(crate) fn update_save_data(&mut self, characters: &Vec<Character>) {
+    pub fn update_save_data(&mut self) {
         self.save_data
-            .update(characters, &self.treasure_box_opened, self.map_index);
+            .update(&mut self.characters, &self.treasure_box_opened, self.map_index);
     }
-    pub(crate) fn load_save_data(&mut self, characters: &mut Vec<Character>) {
-        self.save_data.load(characters, true);
+    pub fn load_save_data(&mut self) {
+        self.save_data.load(&mut self.characters, true);
         self.treasure_box_opened = self.save_data.treasure_box_usize.to_vec();
         self.map_index = *self.save_data.map_usize.get(0).unwrap();
         self.requested_map_index = *self.save_data.map_usize.get(0).unwrap();
     }
-    pub(crate) fn new_game(&mut self, characters: &mut Vec<Character>) {
+    pub fn new_game(&mut self) {
         let mut new_save_data = SaveData::empty();
-        new_save_data.load(characters, false);
+        new_save_data.load(&mut self.characters, false);
         self.treasure_box_opened = new_save_data.treasure_box_usize.to_vec();
         console_log!(
             "new_game map1 {} {}",
@@ -289,11 +280,11 @@ impl SharedState {
 }
 pub struct SharedElements {
     pub message: ElementWrapper,
-    pub(crate) document: Document,
-    pub(crate) title_scene: ElementWrapper,
-    pub(crate) field_scene: ElementWrapper,
-    pub(crate) battle_scene: ElementWrapper,
-    pub(crate) menu_scene: ElementWrapper,
+    pub document: Document,
+    pub title_scene: ElementWrapper,
+    pub field_scene: ElementWrapper,
+    pub battle_scene: ElementWrapper,
+    pub menu_scene: ElementWrapper,
 }
 
 impl SharedElements {

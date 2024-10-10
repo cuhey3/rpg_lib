@@ -1,7 +1,7 @@
 use crate::engine::SharedState;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Menu;
-use crate::rpg::{Character, ItemType};
+use crate::rpg::{ItemType};
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::Cursor;
@@ -25,14 +25,14 @@ pub struct MenuState {
 }
 
 impl MenuState {
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>) {
-        fn init_func(_: &mut Scene, shared_state: &mut SharedState, _: &mut Vec<Character>) {
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState) {
+        fn init_func(_: &mut Scene, shared_state: &mut SharedState) {
             shared_state.elements.menu_scene.show();
             console_log!("init end");
         }
         init_func
     }
-    pub fn show_inventory(&mut self, shared_state: &mut SharedState, items: &Vec<Item>) {
+    pub fn show_inventory(&mut self, shared_state: &SharedState, items: &Vec<Item>) {
         self.elements
             .inventories
             .iter()
@@ -56,11 +56,10 @@ impl MenuState {
     }
     pub fn create_consume_func(
         &self,
-    ) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>, String) {
+    ) -> fn(&mut Scene, &mut SharedState, String) {
         fn consume_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            characters: &mut Vec<Character>,
             key: String,
         ) {
             match &mut scene.scene_type {
@@ -72,7 +71,7 @@ impl MenuState {
                                 menu_state.cursor.consume(key);
                                 return;
                             }
-                            let inventory_len = characters[0].inventory.len();
+                            let inventory_len = shared_state.characters[0].inventory.len();
                             if inventory_len < 2 {
                                 return;
                             }
@@ -81,7 +80,7 @@ impl MenuState {
                                 .update_choice_length(inventory_len);
                             menu_state.inventory_cursor.consume(key);
                             shared_state.elements.message.show();
-                            let target_item = characters[0]
+                            let target_item = shared_state.characters[0]
                                 .inventory
                                 .get(menu_state.inventory_cursor.choose_index);
                             if target_item.is_some() {
@@ -95,7 +94,7 @@ impl MenuState {
                         }
                         "a" => {
                             if menu_state.inventory_opened {
-                                if characters[0].inventory.is_empty() {
+                                if shared_state.characters[0].inventory.is_empty() {
                                     return;
                                 }
                                 if menu_state.inventory_confirm_opened {
@@ -106,25 +105,25 @@ impl MenuState {
                                         ),
                                     ]);
                                     let item = Item::new(
-                                        &characters[0].inventory[menu_state.inventory_choose_index]
+                                        &shared_state.characters[0].inventory[menu_state.inventory_choose_index]
                                             .name,
                                     );
                                     let consume_func = item.consume_func;
-                                    consume_func(&item, shared_state, characters);
-                                    characters[0]
+                                    consume_func(&item, shared_state);
+                                    shared_state.characters[0]
                                         .inventory
                                         .remove(menu_state.inventory_choose_index);
                                     menu_state
                                         .inventory_cursor
-                                        .update_choice_length(characters[0].inventory.len());
+                                        .update_choice_length(shared_state.characters[0].inventory.len());
                                     menu_state.inventory_cursor.reset();
                                     menu_state.inventory_confirm_opened = false;
                                     elements.inventory_confirm.hide();
                                     menu_state
-                                        .show_inventory(shared_state, &characters[0].inventory);
+                                        .show_inventory(shared_state, &shared_state.characters[0].inventory);
                                     return;
                                 } else {
-                                    match &characters[0].inventory
+                                    match &shared_state.characters[0].inventory
                                         [menu_state.inventory_choose_index]
                                         .item_type
                                     {
@@ -146,12 +145,12 @@ impl MenuState {
                             }
                             match menu_state.cursor.choose_index {
                                 0 => {
-                                    let character = characters.get_mut(0).unwrap();
+                                    let character = shared_state.characters.get(0).unwrap();
                                     let inventory = &character.inventory;
-                                    menu_state.show_inventory(shared_state, inventory);
+                                    menu_state.show_inventory(&shared_state, inventory);
                                 }
                                 2 => {
-                                    let character = &characters[0];
+                                    let character = &shared_state.characters[0];
                                     console_log!(
                                         "character_u32, {},{}",
                                         character.current_hp,
@@ -164,8 +163,8 @@ impl MenuState {
                                     console_log!("map_usize, {}", shared_state.map_index);
                                     console_log!(
                                         "map_isize, {}, {}",
-                                        characters[0].position.x,
-                                        characters[0].position.y
+                                        shared_state.characters[0].position.x,
+                                        shared_state.characters[0].position.y
                                     );
                                     console_log!(
                                         "inventory_string, {}",
@@ -176,7 +175,7 @@ impl MenuState {
                                             .collect::<Vec<String>>()
                                             .join(",")
                                     );
-                                    shared_state.update_save_data(characters);
+                                    shared_state.update_save_data();
                                     shared_state.has_message = true;
                                     shared_state.interrupt_animations.push(vec![
                                         Animation::create_message("セーブしました".to_string()),

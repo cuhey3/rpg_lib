@@ -1,7 +1,6 @@
 use crate::engine::SharedState;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Title;
-use crate::rpg::{Character};
 use crate::svg::animation::Animation;
 use crate::svg::Cursor;
 
@@ -10,8 +9,8 @@ pub struct TitleState {
 }
 
 impl TitleState {
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>) {
-        fn init_func(scene: &mut Scene, shared_state: &mut SharedState, _: &mut Vec<Character>) {
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState) {
+        fn init_func(scene: &mut Scene, shared_state: &mut SharedState) {
             shared_state.elements.title_scene.show();
             match &mut scene.scene_type {
                 Title(..) => {}
@@ -22,11 +21,10 @@ impl TitleState {
     }
     pub fn create_consume_func(
         &self,
-    ) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>, String) {
+    ) -> fn(&mut Scene, &mut SharedState, String) {
         fn consume_func(
             scene: &mut Scene,
             shared_state: &mut SharedState,
-            characters: &mut Vec<Character>,
             key: String,
         ) {
             match &mut scene.scene_type {
@@ -40,9 +38,9 @@ impl TitleState {
                         }
                         shared_state.requested_scene_index = 1;
                         if title_state.cursor.choose_index == 0 {
-                            shared_state.new_game(characters);
+                            shared_state.new_game();
                         } else {
-                            shared_state.load_save_data(characters);
+                            shared_state.load_save_data();
                         }
                         shared_state
                             .interrupt_animations
