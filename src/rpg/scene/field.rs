@@ -1,13 +1,13 @@
-use crate::scene::field::EventType::*;
-use crate::scene::scene_type::SceneType::Field;
-use crate::scene::Scene;
-use crate::{Animation, ChannelMessage, Character, Item, MessageType, Position, PositionMessage, SharedStatus};
-use serde::{Deserialize, Serialize};
+use crate::rpg::scene::field::EventType::*;
+use crate::rpg::scene::Scene;
+use crate::rpg::scene::SceneType::Field;
+use crate::rpg::{Character, SharedState};
+use crate::ws::{ChannelMessage, MessageType, PositionMessage};
+use crate::{Animation, Item, Position};
 use wasm_bindgen_test::console_log;
 use web_sys::{Document, Element};
 
-pub struct FieldStatus {
-    character_cursor_element: Element,
+pub struct FieldState {
     character_direction_element: Element,
     wrapper_element: Element,
     wrapper_translate_x: i32,
@@ -15,16 +15,16 @@ pub struct FieldStatus {
     maps: Vec<Map>,
 }
 
-impl FieldStatus {
+impl FieldState {
     pub fn move_to(
         &mut self,
-        shared_status: &mut SharedStatus,
+        shared_state: &mut SharedState,
         characters: &mut Vec<Character>,
         key: String,
     ) {
-        let map = &mut self.maps[shared_status.map_index];
-        let start_x: i32 = characters[0].position.x;
-        let start_y: i32 = characters[0].position.y;
+        let map = &mut self.maps[shared_state.map_index];
+        // let start_x: i32 = characters[0].position.x;
+        // let start_y: i32 = characters[0].position.y;
         let mut x: i32 = characters[0].position.x.to_owned();
         let mut y: i32 = characters[0].position.y.to_owned();
         let original_translate_x = self.wrapper_translate_x.to_owned();
@@ -52,14 +52,14 @@ impl FieldStatus {
         let found_event = map
             .event_positions
             .iter()
-            .find(|(position, event_type)| position.x == x && position.y == y);
+            .find(|(position, _)| position.x == x && position.y == y);
         if found_event.is_none() {
             match key.as_str() {
                 "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
                     characters[0].position = Position::new(x, y);
                     self.update_character_position(x, y);
                     // self.character_position = Position::new(x, y);
-                    // shared_status.interrupt_animations.push(vec![Animation::create_move(start_x, start_y, x, y)]);
+                    // shared_state.interrupt_animations.push(vec![Animation::create_move(start_x, start_y, x, y)]);
                 }
                 _ => panic!(),
             }
@@ -68,8 +68,8 @@ impl FieldStatus {
         let found_event = found_event.unwrap();
         match found_event.1 {
             Enemy => {
-                shared_status.requested_scene_index += 1;
-                shared_status
+                shared_state.requested_scene_index += 1;
+                shared_state
                     .interrupt_animations
                     .push(vec![Animation::create_fade_out_in()]);
                 self.reset_translate(original_translate_x, original_translate_y);
@@ -79,7 +79,7 @@ impl FieldStatus {
                 let treasure_events = map
                     .event_positions
                     .iter()
-                    .filter(|(position, event_type)| match event_type {
+                    .filter(|(_, event_type)| match event_type {
                         TreasureBox => true,
                         _ => false,
                     })
@@ -87,9 +87,9 @@ impl FieldStatus {
                 let found_treasure_box = treasure_events
                     .iter()
                     .enumerate()
-                    .find(|(index, tuple)| tuple.0.x == x && tuple.0.y == y);
+                    .find(|(_, tuple)| tuple.0.x == x && tuple.0.y == y);
                 let treasure_index = found_treasure_box.unwrap().0;
-                let opened = shared_status.treasure_box_opened[map.map_index]
+                let opened = shared_state.treasure_box_opened[map.map_index]
                     .iter()
                     .find(|index| **index == treasure_index)
                     .is_some();
@@ -97,14 +97,14 @@ impl FieldStatus {
                     self.reset_translate(original_translate_x, original_translate_y);
                     return;
                 }
-                shared_status.treasure_box_opened[map.map_index].push(treasure_index);
+                shared_state.treasure_box_opened[map.map_index].push(treasure_index);
                 map.treasure_elements[treasure_index]
                     .set_attribute("fill", "gray")
                     .unwrap();
-                shared_status.has_message = true;
+                shared_state.has_message = true;
                 let item = map.treasure_items.get(treasure_index).unwrap();
                 characters[0].inventory.push(Item::new(&item.name));
-                shared_status
+                shared_state
                     .interrupt_animations
                     .push(vec![Animation::create_message(format!(
                         "{}を手に入れた",
@@ -124,15 +124,13 @@ impl FieldStatus {
                     map_connection_detail.to_position.y,
                 );
                 self.reset_translate(original_translate_x, original_translate_y);
-                shared_status.requested_map_index = (shared_status.map_index as i32
-                    + map_connection_detail.index_addition)
-                    as usize;
-                shared_status
+                shared_state.requested_map_index =
+                    (shared_state.map_index as i32 + map_connection_detail.index_addition) as usize;
+                shared_state
                     .interrupt_animations
                     .push(vec![Animation::create_fade_out_in()]);
                 return;
             }
-            _ => {}
         }
     }
 
@@ -155,17 +153,17 @@ impl FieldStatus {
             )
             .unwrap();
     }
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedStatus, &mut Vec<Character>) {
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>) {
         fn init_func(
             scene: &mut Scene,
-            shared_status: &mut SharedStatus,
+            shared_state: &mut SharedState,
             characters: &mut Vec<Character>,
         ) {
-            shared_status.elements.field_scene.show();
+            shared_state.elements.field_scene.show();
             match &mut scene.scene_type {
-                Field(field_status) => {
-                    field_status.maps[shared_status.map_index].draw(shared_status);
-                    field_status.update_character_position(
+                Field(field_state) => {
+                    field_state.maps[shared_state.map_index].draw(shared_state);
+                    field_state.update_character_position(
                         characters[0].position.x,
                         characters[0].position.y,
                     );
@@ -183,15 +181,15 @@ impl FieldStatus {
     }
     pub fn create_consume_func(
         &self,
-    ) -> fn(&mut Scene, &mut SharedStatus, &mut Vec<Character>, String) {
+    ) -> fn(&mut Scene, &mut SharedState, &mut Vec<Character>, String) {
         fn consume_func(
             scene: &mut Scene,
-            shared_status: &mut SharedStatus,
+            shared_state: &mut SharedState,
             characters: &mut Vec<Character>,
             key: String,
         ) {
             match &mut scene.scene_type {
-                Field(field_status) => {
+                Field(field_state) => {
                     let direction_string = match key.as_str() {
                         "ArrowUp" => "↑",
                         "ArrowDown" => "↓",
@@ -200,26 +198,26 @@ impl FieldStatus {
                         _ => "",
                     };
                     if direction_string != "" {
-                        field_status
+                        field_state
                             .character_direction_element
                             .set_inner_html(direction_string);
                     }
                     match key.as_str() {
                         "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
-                            field_status.move_to(shared_status, characters, key.to_owned());
+                            field_state.move_to(shared_state, characters, key.to_owned());
                             let message = PositionMessage {
-                                user_name: shared_status.web_socket_wrapper.user_name.to_owned(),
+                                user_name: shared_state.web_socket_wrapper.user_name.to_owned(),
                                 direction: key.to_owned(),
                                 position_x: characters[0].position.x,
                                 position_y: characters[0].position.y,
-                                map_index: shared_status.requested_map_index,
+                                map_index: shared_state.requested_map_index,
                             };
-                            shared_status
+                            shared_state
                                 .web_socket_wrapper
                                 .send_message(serde_json::to_string(&message).unwrap());
                         }
                         "Escape" => {
-                            shared_status.requested_scene_index += 2;
+                            shared_state.requested_scene_index += 2;
                         }
                         _ => (),
                     }
@@ -229,24 +227,28 @@ impl FieldStatus {
         }
         consume_func
     }
-    pub fn update_map(
-        &mut self,
-        shared_status: &mut SharedStatus,
-        characters: &mut Vec<Character>,
-    ) {
-        let mut map = &mut self.maps[shared_status.map_index];
-        map.init_treasure_box_opened(shared_status);
-        map.draw(shared_status);
+    pub fn update_map(&mut self, shared_state: &mut SharedState, characters: &mut Vec<Character>) {
+        let map = &mut self.maps[shared_state.map_index];
+        map.init_treasure_box_opened(shared_state);
+        map.draw(shared_state);
         self.update_character_position(characters[0].position.x, characters[0].position.y);
     }
 
-    pub fn consume_channel_message(&mut self, message: &ChannelMessage, shared_status: &mut SharedStatus) {
-        let found = shared_status.online_users.iter_mut().enumerate().find(|(_, user)|user.user_name == message.user_name);
+    pub fn consume_channel_message(
+        &mut self,
+        message: &ChannelMessage,
+        shared_state: &mut SharedState,
+    ) {
+        let found = shared_state
+            .online_users
+            .iter_mut()
+            .enumerate()
+            .find(|(_, user)| user.user_name == message.user_name);
         match message.message_type {
             MessageType::Left => {
                 if found.is_some() {
                     let remove_index = found.unwrap().0;
-                    shared_status.online_users.remove(remove_index);
+                    shared_state.online_users.remove(remove_index);
                 }
             }
             MessageType::Message => {
@@ -258,25 +260,24 @@ impl FieldStatus {
                         found.position_x = online_user.position_x;
                         found.position_y = online_user.position_y;
                     } else {
-                        shared_status.online_users.push(online_user);
+                        shared_state.online_users.push(online_user);
                     }
-                } else if let Ok(message) = serde_json::from_str::<ChannelMessage>(&message.message) {
+                } else if let Ok(message) = serde_json::from_str::<ChannelMessage>(&message.message)
+                {
                     match message.message_type {
                         MessageType::Left => {
                             if found.is_some() {
                                 let remove_index = found.unwrap().0;
-                                shared_status.online_users.remove(remove_index);
+                                shared_state.online_users.remove(remove_index);
                             }
                         }
-                        _ => {
-
-                        }
+                        _ => {}
                     }
                 };
             }
             _ => {}
         }
-        self.maps[shared_status.map_index].draw(shared_status);
+        self.maps[shared_state.map_index].draw(shared_state);
     }
 }
 
@@ -563,14 +564,14 @@ impl Map {
         };
         map
     }
-    fn init_treasure_box_opened(&mut self, shared_status: &mut SharedStatus) {
-        let treasure_box_opened = &mut shared_status.treasure_box_opened;
+    fn init_treasure_box_opened(&mut self, shared_state: &mut SharedState) {
+        let treasure_box_opened = &mut shared_state.treasure_box_opened;
         while treasure_box_opened.len() <= self.map_index {
             treasure_box_opened.push(vec![]);
         }
     }
-    fn draw(&mut self, shared_status: &SharedStatus) {
-        let ref document = shared_status.elements.document;
+    fn draw(&mut self, shared_state: &SharedState) {
+        let ref document = shared_state.elements.document;
         let wrapper_element = document.query_selector("#field-wrapper").unwrap().unwrap();
         while {
             let child = wrapper_element.child_nodes().get(0);
@@ -600,23 +601,25 @@ impl Map {
             .set_attribute("height", &*self.ground_height.to_string())
             .unwrap();
         wrapper_element.append_child(&*ground).unwrap();
-        let treasure_box_opened = &shared_status.treasure_box_opened[self.map_index];
+        let treasure_box_opened = &shared_state.treasure_box_opened[self.map_index];
         self.events_to_elements(document, &wrapper_element, treasure_box_opened);
-        self.draw_online_user(shared_status);
+        self.draw_online_user(shared_state);
     }
-    pub fn draw_online_user(&mut self, shared_status: &SharedStatus) {
+    pub fn draw_online_user(&mut self, shared_state: &SharedState) {
         let map_index = self.map_index;
-        for user in shared_status.online_users.iter() {
+        for user in shared_state.online_users.iter() {
             if user.map_index != map_index {
-                continue
+                continue;
             }
-            let ref document = shared_status.elements.document;
+            let ref document = shared_state.elements.document;
             let wrapper_element = document.query_selector("#field-wrapper").unwrap().unwrap();
             let rect = document
                 .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "rect")
                 .unwrap();
-            rect.set_attribute("x", &*user.position_x.to_string()).unwrap();
-            rect.set_attribute("y", &*user.position_y.to_string()).unwrap();
+            rect.set_attribute("x", &*user.position_x.to_string())
+                .unwrap();
+            rect.set_attribute("y", &*user.position_y.to_string())
+                .unwrap();
             rect.set_attribute("fill", "white").unwrap();
             rect.set_attribute("width", "40").unwrap();
             rect.set_attribute("height", "40").unwrap();
@@ -637,7 +640,7 @@ impl Map {
                 "ArrowLeft" => "←",
                 "ArrowUp" => "↑",
                 "ArrowDown" => "↓",
-                _ => ""
+                _ => "",
             });
             wrapper_element.append_child(&*text).unwrap();
         }
@@ -651,25 +654,19 @@ enum EventType {
     MapConnection(MapConnectionDetail),
 }
 
-pub fn create_field_scene(shared_status: &mut SharedStatus) -> Scene {
+pub fn create_field_scene(shared_state: &mut SharedState) -> Scene {
     let mut map = Map::init_1();
-    map.init_treasure_box_opened(shared_status);
-    map.draw(shared_status);
-    let character_cursor_element = shared_status
-        .elements
-        .document
-        .query_selector(".character")
-        .unwrap()
-        .unwrap();
-    let character_direction_element = shared_status
+    map.init_treasure_box_opened(shared_state);
+    map.draw(shared_state);
+    let character_direction_element = shared_state
         .elements
         .document
         .query_selector(".character.direction")
         .unwrap()
         .unwrap();
-    let field_status = FieldStatus {
+    let field_state = FieldState {
         character_direction_element,
-        wrapper_element: shared_status
+        wrapper_element: shared_state
             .elements
             .document
             .query_selector("#field-wrapper")
@@ -677,12 +674,11 @@ pub fn create_field_scene(shared_status: &mut SharedStatus) -> Scene {
             .unwrap(),
         wrapper_translate_x: 0,
         wrapper_translate_y: 0,
-        character_cursor_element,
         maps: vec![map, Map::init_2(), Map::init_3()],
     };
-    let consume_func = field_status.create_consume_func();
-    let init_func = field_status.create_init_func();
-    let scene_type = Field(field_status);
+    let consume_func = field_state.create_consume_func();
+    let init_func = field_state.create_init_func();
+    let scene_type = Field(field_state);
     Scene {
         element_id: "field".to_string(),
         scene_type,
