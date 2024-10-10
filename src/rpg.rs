@@ -1,5 +1,6 @@
 use crate::engine::application_types::StateType;
 use crate::engine::{Engine, Primitives, SharedElements, State};
+use crate::ws::WebSocketWrapper;
 use crate::Position;
 use battle::BattleState;
 use field::FieldState;
@@ -137,13 +138,14 @@ pub fn mount() -> Engine {
             requested_map_index: 0,
         },
     };
-    let scenes = vec![
+    let mut scenes = vec![
         TitleState::create_title_scene(&mut shared_state),
         FieldState::create_field_scene(&mut shared_state),
         BattleState::create_battle_scene(&mut shared_state),
         MenuState::create_menu_scene(&mut shared_state),
     ];
-    let mut engine = Engine::new(shared_state, scenes);
-    engine.init();
-    engine
+    let init_func = scenes[0].init_func;
+    init_func(&mut scenes[0], &mut shared_state);
+    let web_socket_wrapper = WebSocketWrapper::new(shared_state.user_name.to_owned());
+    Engine::new(shared_state, scenes, web_socket_wrapper)
 }

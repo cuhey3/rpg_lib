@@ -5,18 +5,19 @@ use crate::ws::{ChannelMessage, WebSocketWrapper};
 use crate::Position;
 use application_types::SceneType::RPGField;
 use scene::Scene;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_test::console_log;
-use web_sys::{Document, WebSocket};
+use web_sys::Document;
 
 pub mod application_types;
 pub mod scene;
 
 #[wasm_bindgen]
 pub struct Engine {
-    scenes: Vec<Scene>,
-    web_socket_wrapper: WebSocketWrapper,
-    shared_state: State,
+    pub(crate) scenes: Vec<Scene>,
+    pub(crate) web_socket_wrapper: WebSocketWrapper,
+    pub(crate) shared_state: State,
 }
 
 #[wasm_bindgen]
@@ -24,8 +25,8 @@ impl Engine {
     pub(crate) fn new(
         shared_state: State,
         scenes: Vec<Scene>,
+        web_socket_wrapper: WebSocketWrapper,
     ) -> Engine {
-        let web_socket_wrapper = WebSocketWrapper::new(shared_state.user_name.to_owned());
         Engine {
             scenes,
             shared_state,
@@ -33,14 +34,6 @@ impl Engine {
         }
     }
 
-    pub(crate) fn init(&mut self) {
-        let init_func = self.scenes[0].init_func;
-        init_func(&mut self.scenes[0], &mut self.shared_state);
-    }
-
-    pub fn set_web_socket_instance(&mut self, web_socket: WebSocket) {
-        self.web_socket_wrapper.update_web_socket(web_socket);
-    }
     pub fn keydown(&mut self, key: String) {
         if self.shared_state.primitives.has_message {
             self.shared_state.elements.message.hide();
@@ -77,6 +70,10 @@ impl Engine {
         }
     }
     pub fn animate(&mut self, step: f64) {
+        while !(*self.web_socket_wrapper.messages.borrow_mut()).is_empty() {
+            let mut message = (*self.web_socket_wrapper.messages.borrow_mut()).remove(0);
+            self.receive_channel_message(&mut message);
+        }
         for animation in self.shared_state.interrupt_animations.iter_mut() {
             animation.get_mut(0).unwrap().set_step(step);
         }
@@ -143,10 +140,10 @@ impl Engine {
             self.shared_state.primitives.scene_index
         );
         let scene_index = self.shared_state.primitives.scene_index;
-        if scene_index != 0 && !self.web_socket_wrapper.is_joined {
+        if scene_index != 0 && !self.web_socket_wrapper.state.borrow_mut().is_joined {
             self.web_socket_wrapper.join();
         }
-        if scene_index == 0 && self.web_socket_wrapper.is_joined {
+        if scene_index == 0 && self.web_socket_wrapper.state.borrow_mut().is_joined {
             self.web_socket_wrapper.left();
         }
         if scene_index != 3 {
@@ -180,28 +177,27 @@ impl Engine {
             .find(|animation| animation.get(0).unwrap().block_scene_update)
             .is_some()
     }
-    pub fn receive_channel_message(&mut self, message: String) {
-        if let Ok(mut channel_message) = serde_json::from_str::<ChannelMessage>(&message) {
-            if channel_message.user_name == self.web_socket_wrapper.user_name {
-                return;
-            }
-            for scene in self.scenes.iter_mut() {
-                if let Scene {
-                    scene_type: RPGField(field_state),
-                    ..
-                } = scene
-                {
-                    let mut message = channel_message.message.to_owned();
-                    // TODO
-                    // ネストしたJSONの扱い…
-                    while let Ok(message_string) = serde_json::from_str::<String>(&message) {
-                        message = message_string
-                    }
-                    channel_message.message = message;
-                    field_state.consume_channel_message(&channel_message, &mut self.shared_state);
+
+    fn receive_channel_message(&mut self, channel_message: &mut ChannelMessage) {
+        if channel_message.user_name == self.web_socket_wrapper.user_name {
+            return;
+        }
+        for scene in self.scenes.iter_mut() {
+            if let Scene {
+                scene_type: RPGField(field_state),
+                ..
+            } = scene
+            {
+                let mut message = channel_message.message.to_owned();
+                // TODO
+                // ネストしたJSONの扱い…
+                while let Ok(message_string) = serde_json::from_str::<String>(&message) {
+                    message = message_string
                 }
+                channel_message.message = message;
+                field_state.consume_channel_message(&channel_message, &mut self.shared_state);
             }
-        };
+        }
     }
 }
 
@@ -234,6 +230,15 @@ impl Position {
         }
         result
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PositionMessage {
+    pub user_name: String,
+    pub direction: String,
+    pub position_x: i32,
+    pub position_y: i32,
+    pub map_index: usize,
 }
 
 pub struct SharedElements {

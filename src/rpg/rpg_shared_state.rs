@@ -1,7 +1,6 @@
 use crate::engine::application_types::StateType;
-use crate::engine::State;
+use crate::engine::{PositionMessage, State};
 use crate::rpg::{Character, SaveData};
-use crate::ws::PositionMessage;
 use wasm_bindgen_test::console_log;
 
 pub struct RPGSharedState {
