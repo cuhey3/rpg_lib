@@ -1,79 +1,16 @@
-use crate::svg::animation::Animation;
-use crate::svg::element_wrapper::ElementWrapper;
+use crate::application_types::{ApplicationType, StateType};
+use crate::engine::{Engine, SharedElements, SharedState, State};
+use crate::rpg::scene::battle::create_battle_scene;
+use crate::rpg::scene::field::create_field_scene;
+use crate::rpg::scene::menu::create_menu_scene;
+use crate::rpg::scene::title::create_title_scene;
 use crate::ws::{PositionMessage, WebSocketWrapper};
 use crate::Position;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen_test::console_log;
-use web_sys::Document;
+use crate::svg::animation::Animation;
 
 pub mod scene;
-
-pub struct SharedState {
-    pub scene_index: usize,
-    pub requested_scene_index: usize,
-    pub map_index: usize,
-    pub requested_map_index: usize,
-    pub interrupt_animations: Vec<Vec<Animation>>,
-    pub has_message: bool,
-    pub elements: SharedElements,
-    pub treasure_box_opened: Vec<Vec<usize>>,
-    pub save_data: SaveData,
-    pub web_socket_wrapper: WebSocketWrapper,
-    pub online_users: Vec<PositionMessage>,
-}
-
-impl SharedState {
-    fn update_save_data(&mut self, characters: &Vec<Character>) {
-        self.save_data
-            .update(characters, &self.treasure_box_opened, self.map_index);
-    }
-    fn load_save_data(&mut self, characters: &mut Vec<Character>) {
-        self.save_data.load(characters, true);
-        self.treasure_box_opened = self.save_data.treasure_box_usize.to_vec();
-        self.map_index = *self.save_data.map_usize.get(0).unwrap();
-        self.requested_map_index = *self.save_data.map_usize.get(0).unwrap();
-    }
-    fn new_game(&mut self, characters: &mut Vec<Character>) {
-        let mut new_save_data = SaveData::empty();
-        new_save_data.load(characters, false);
-        self.treasure_box_opened = new_save_data.treasure_box_usize.to_vec();
-        console_log!(
-            "new_game map1 {} {}",
-            self.map_index,
-            new_save_data.map_usize.get(0).unwrap()
-        );
-        self.map_index = *new_save_data.map_usize.get(0).unwrap();
-        self.requested_map_index = *new_save_data.map_usize.get(0).unwrap();
-        console_log!(
-            "new_game map2 {} {}",
-            self.map_index,
-            new_save_data.map_usize.get(0).unwrap()
-        );
-    }
-}
-pub struct SharedElements {
-    pub message: ElementWrapper,
-    document: Document,
-    title_scene: ElementWrapper,
-    field_scene: ElementWrapper,
-    battle_scene: ElementWrapper,
-    menu_scene: ElementWrapper,
-}
-
-impl SharedElements {
-    pub fn new() -> SharedElements {
-        let window = web_sys::window().unwrap();
-        let document = window.document().unwrap();
-        SharedElements {
-            message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
-            title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
-            field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
-            battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
-            menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
-            document,
-        }
-    }
-}
 
 pub struct Item {
     pub name: String,
@@ -209,4 +146,72 @@ pub struct Character {
     pub max_hp: u32,
     pub position: Position,
     pub inventory: Vec<Item>,
+}
+
+pub struct RPGSharedState {
+    pub user_name: String,
+    pub scene_index: usize,
+    pub requested_scene_index: usize,
+    pub map_index: usize,
+    pub requested_map_index: usize,
+    pub interrupt_animations: Vec<Vec<Animation>>,
+    pub has_message: bool,
+    pub elements: SharedElements,
+    pub treasure_box_opened: Vec<Vec<usize>>,
+    pub save_data: SaveData,
+    pub online_users: Vec<PositionMessage>,
+    pub to_send_channel_messages: Vec<String>
+}
+
+pub fn mount() -> Engine {
+    let mut rng = rand::thread_rng();
+    let random_number = rng.random::<u16>();
+    let user_name = random_number.to_string();
+    let web_socket_wrapper = WebSocketWrapper::new(user_name.to_owned());
+    let mut shared_state = SharedState {
+        user_name: user_name.to_owned(),
+        has_message: false,
+        scene_index: 0,
+        requested_scene_index: 0,
+        map_index: 0,
+        requested_map_index: 0,
+        interrupt_animations: vec![],
+        elements: SharedElements::new(),
+        treasure_box_opened: vec![],
+        save_data: SaveData::empty(),
+        online_users: vec![],
+        to_send_channel_messages: vec![],
+    };
+    let mut rpg_shared_state = RPGSharedState {
+        user_name: user_name.to_owned(),
+        has_message: false,
+        scene_index: 0,
+        requested_scene_index: 0,
+        map_index: 0,
+        requested_map_index: 0,
+        interrupt_animations: vec![],
+        elements: SharedElements::new(),
+        treasure_box_opened: vec![],
+        save_data: SaveData::empty(),
+        online_users: vec![],
+        to_send_channel_messages: vec![],
+    };
+    let scenes = vec![
+        create_title_scene(&mut shared_state),
+        create_field_scene(&mut shared_state),
+        create_battle_scene(&mut shared_state),
+        create_menu_scene(&mut shared_state),
+    ];
+    let mut engine = Engine::new(
+        ApplicationType::RPG,
+        State {
+            to_send_channel_messages: vec![],
+            state_type: StateType::RPGShared(rpg_shared_state),
+        },
+        shared_state,
+        scenes,
+        web_socket_wrapper,
+    );
+    engine.init();
+    engine
 }

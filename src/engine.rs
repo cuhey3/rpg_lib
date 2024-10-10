@@ -1,17 +1,14 @@
-use crate::rpg::scene::battle::create_battle_scene;
-use crate::rpg::scene::field::create_field_scene;
-use crate::rpg::scene::menu::create_menu_scene;
-use crate::rpg::scene::title::create_title_scene;
+use crate::application_types::{ApplicationType, StateType};
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Field;
-use crate::rpg::{Character, SaveData, SharedElements, SharedState};
+use crate::rpg::{Character, SaveData};
 use crate::svg::animation::Animation;
-use crate::ws::{ChannelMessage, WebSocketWrapper};
+use crate::svg::element_wrapper::ElementWrapper;
+use crate::ws::{ChannelMessage, PositionMessage, WebSocketWrapper};
 use crate::Position;
-use rand::Rng;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_test::console_log;
-use web_sys::WebSocket;
+use web_sys::{Document, WebSocket};
 
 #[wasm_bindgen]
 pub struct Engine {
@@ -19,50 +16,35 @@ pub struct Engine {
     scenes: Vec<Scene>,
     shared_state: SharedState,
     web_socket_wrapper: WebSocketWrapper,
-    instance_id: String,
+    application_type: ApplicationType,
+    state: State,
 }
 
 #[wasm_bindgen]
 impl Engine {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Engine {
-        let mut rng = rand::thread_rng();
-        let random_number = rng.random::<u16>();
-        let user_name = random_number.to_string();
-        let web_socket_wrapper = WebSocketWrapper::new(user_name.to_owned());
-        let mut shared_state = SharedState {
-            has_message: false,
-            scene_index: 0,
-            requested_scene_index: 0,
-            map_index: 0,
-            requested_map_index: 0,
-            interrupt_animations: vec![],
-            elements: SharedElements::new(),
-            treasure_box_opened: vec![],
-            save_data: SaveData::empty(),
-            web_socket_wrapper: web_socket_wrapper.clone(),
-            online_users: vec![],
-        };
+    pub(crate) fn new(
+        application_type: ApplicationType,
+        state: State,
+        shared_state: SharedState,
+        scenes: Vec<Scene>,
+        web_socket_wrapper: WebSocketWrapper,
+    ) -> Engine {
         Engine {
+            application_type,
             characters: vec![Character {
                 current_hp: 25,
                 max_hp: 80,
                 position: Position { x: -1, y: -1 },
                 inventory: vec![],
             }],
-            scenes: vec![
-                create_title_scene(&mut shared_state),
-                create_field_scene(&mut shared_state),
-                create_battle_scene(&mut shared_state),
-                create_menu_scene(&mut shared_state),
-            ],
+            scenes,
             shared_state,
             web_socket_wrapper,
-            instance_id: user_name.to_owned(),
+            state,
         }
     }
 
-    pub fn init(&mut self) {
+    pub(crate) fn init(&mut self) {
         let init_func = self.scenes[0].init_func;
         init_func(
             &mut self.scenes[0],
@@ -73,7 +55,6 @@ impl Engine {
 
     pub fn set_web_socket_instance(&mut self, web_socket: WebSocket) {
         self.web_socket_wrapper.update_web_socket(web_socket);
-        self.shared_state.web_socket_wrapper = self.web_socket_wrapper.clone();
     }
     pub fn keydown(&mut self, key: String) {
         if self.shared_state.has_message {
@@ -94,6 +75,10 @@ impl Engine {
             &mut self.characters,
             key,
         );
+        while self.shared_state.to_send_channel_messages.len() > 0 {
+            let message = self.shared_state.to_send_channel_messages.remove(0);
+            self.web_socket_wrapper.send_message(message);
+        }
         if !self.has_animation_blocking_scene_update() {
             if self.shared_state.scene_index != self.shared_state.requested_scene_index {
                 self.shared_state.scene_index = self.shared_state.requested_scene_index;
@@ -204,7 +189,7 @@ impl Engine {
     }
     pub fn receive_channel_message(&mut self, message: String) {
         if let Ok(mut channel_message) = serde_json::from_str::<ChannelMessage>(&message) {
-            if channel_message.user_name == self.instance_id {
+            if channel_message.user_name == self.web_socket_wrapper.user_name {
                 return;
             }
             for scene in self.scenes.iter_mut() {
@@ -256,4 +241,77 @@ impl Position {
         }
         result
     }
+}
+
+pub struct SharedState {
+    pub user_name: String,
+    pub scene_index: usize,
+    pub requested_scene_index: usize,
+    pub map_index: usize,
+    pub requested_map_index: usize,
+    pub interrupt_animations: Vec<Vec<Animation>>,
+    pub has_message: bool,
+    pub elements: SharedElements,
+    pub treasure_box_opened: Vec<Vec<usize>>,
+    pub save_data: SaveData,
+    pub online_users: Vec<PositionMessage>,
+    pub to_send_channel_messages: Vec<String>
+}
+
+impl SharedState {
+    pub(crate) fn update_save_data(&mut self, characters: &Vec<Character>) {
+        self.save_data
+            .update(characters, &self.treasure_box_opened, self.map_index);
+    }
+    pub(crate) fn load_save_data(&mut self, characters: &mut Vec<Character>) {
+        self.save_data.load(characters, true);
+        self.treasure_box_opened = self.save_data.treasure_box_usize.to_vec();
+        self.map_index = *self.save_data.map_usize.get(0).unwrap();
+        self.requested_map_index = *self.save_data.map_usize.get(0).unwrap();
+    }
+    pub(crate) fn new_game(&mut self, characters: &mut Vec<Character>) {
+        let mut new_save_data = SaveData::empty();
+        new_save_data.load(characters, false);
+        self.treasure_box_opened = new_save_data.treasure_box_usize.to_vec();
+        console_log!(
+            "new_game map1 {} {}",
+            self.map_index,
+            new_save_data.map_usize.get(0).unwrap()
+        );
+        self.map_index = *new_save_data.map_usize.get(0).unwrap();
+        self.requested_map_index = *new_save_data.map_usize.get(0).unwrap();
+        console_log!(
+            "new_game map2 {} {}",
+            self.map_index,
+            new_save_data.map_usize.get(0).unwrap()
+        );
+    }
+}
+pub struct SharedElements {
+    pub message: ElementWrapper,
+    pub(crate) document: Document,
+    pub(crate) title_scene: ElementWrapper,
+    pub(crate) field_scene: ElementWrapper,
+    pub(crate) battle_scene: ElementWrapper,
+    pub(crate) menu_scene: ElementWrapper,
+}
+
+impl SharedElements {
+    pub fn new() -> SharedElements {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        SharedElements {
+            message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
+            title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
+            field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
+            battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
+            menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
+            document,
+        }
+    }
+}
+
+pub struct State {
+    pub to_send_channel_messages: Vec<String>,
+    pub state_type: StateType,
 }

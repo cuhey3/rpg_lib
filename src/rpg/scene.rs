@@ -1,8 +1,9 @@
+use crate::engine::SharedState;
 use crate::rpg::scene::battle::BattleState;
 use crate::rpg::scene::field::FieldState;
 use crate::rpg::scene::menu::MenuState;
 use crate::rpg::scene::title::TitleState;
-use crate::rpg::{Character, SharedState};
+use crate::rpg::Character;
 
 pub mod battle;
 pub mod field;

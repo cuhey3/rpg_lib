@@ -1,6 +1,7 @@
+use crate::engine::SharedState;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Title;
-use crate::rpg::{Character, SharedState};
+use crate::rpg::{Character};
 use crate::svg::animation::Animation;
 use crate::svg::Cursor;
 

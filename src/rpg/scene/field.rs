@@ -1,7 +1,8 @@
+use crate::engine::SharedState;
 use crate::rpg::scene::field::EventType::*;
 use crate::rpg::scene::Scene;
 use crate::rpg::scene::SceneType::Field;
-use crate::rpg::{Character, SharedState};
+use crate::rpg::Character;
 use crate::ws::{ChannelMessage, MessageType, PositionMessage};
 use crate::{Animation, Item, Position};
 use wasm_bindgen_test::console_log;
@@ -206,15 +207,14 @@ impl FieldState {
                         "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
                             field_state.move_to(shared_state, characters, key.to_owned());
                             let message = PositionMessage {
-                                user_name: shared_state.web_socket_wrapper.user_name.to_owned(),
+                                user_name: shared_state.user_name.to_owned(),
                                 direction: key.to_owned(),
                                 position_x: characters[0].position.x,
                                 position_y: characters[0].position.y,
                                 map_index: shared_state.requested_map_index,
                             };
                             shared_state
-                                .web_socket_wrapper
-                                .send_message(serde_json::to_string(&message).unwrap());
+                                .to_send_channel_messages.push(serde_json::to_string(&message).unwrap());
                         }
                         "Escape" => {
                             shared_state.requested_scene_index += 2;

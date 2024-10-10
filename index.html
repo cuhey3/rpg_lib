@@ -120,12 +120,11 @@
     <rect x="218" y="63" width="80" height="80" fill="gray" class="ArrowRight"></rect>
 </svg>
 <script type="module">
-    import init, {Engine} from "./pkg/rpg_lib.js?t=202410082000";
+    import init, {create_rpg_engine} from "./pkg/rpg_lib.js?t=202410082000";
 
     await init();
 
-    const engine = new Engine();
-    engine.init();
+    const engine = create_rpg_engine();
     const ws = new WebSocket("https://rust-server-956911707039.asia-northeast1.run.app/ws");
     ws.onmessage = (message) => {
         engine.receive_channel_message(message.data);
