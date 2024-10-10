@@ -62,6 +62,7 @@ impl WebSocketWrapper {
         let clone = self.clone();
         let state_clone = self.state.clone();
         let onopen_callback = Closure::<dyn FnMut()>::new(move || {
+            console_log!("websocket connection opened.");
             let channel_user = ChannelUser {
                 user_name: clone.user_name.to_owned(),
                 channel_name: "rpg".to_string(),
@@ -72,6 +73,8 @@ impl WebSocketWrapper {
                 .unwrap();
             let mut state_clone = state_clone.borrow_mut();
             (*state_clone).is_opened = true;
+            (*state_clone).is_closed = false;
+            (*state_clone).is_joined = false;
         });
         self.ws
             .set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
@@ -95,6 +98,8 @@ impl WebSocketWrapper {
 
         let state_clone = self.state.clone();
         let onclose_callback = Closure::<dyn FnMut()>::new(move || {
+            console_log!("websocket connection closed.");
+
             let mut state_clone = state_clone.borrow_mut();
             (*state_clone).is_closed = true;
         });
@@ -131,7 +136,8 @@ impl WebSocketWrapper {
     }
     pub fn send_message(&mut self, message: String) {
         if !self.is_ready() {
-            console_log!("websocket is not ready. message does not send.");
+            console_log!("reconnect websocket...");
+            self.reconnect();
             return
         }
         self.ws
@@ -140,9 +146,9 @@ impl WebSocketWrapper {
     }
 
     // Need to wait for onopen event elsewhere
-    // pub fn update_web_socket(&mut self) {
-    //     self.ws =
-    //         WebSocket::new("https://rust-server-956911707039.asia-northeast1.run.app/ws").unwrap();
-    //     self.set_callbacks();
-    // }
+    pub fn reconnect(&mut self) {
+        self.ws =
+            WebSocket::new("https://rust-server-956911707039.asia-northeast1.run.app/ws").unwrap();
+        self.set_callbacks();
+    }
 }
