@@ -1,4 +1,3 @@
-mod application_types;
 pub mod engine;
 mod rpg;
 mod svg;
@@ -6,7 +5,6 @@ mod utils;
 mod ws;
 
 use crate::engine::Engine;
-use crate::rpg::Item;
 use svg::animation::Animation;
 use wasm_bindgen::prelude::wasm_bindgen;
 

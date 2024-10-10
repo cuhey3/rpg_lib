@@ -1,62 +1,21 @@
-use crate::application_types::{ApplicationType, StateType};
-use crate::engine::{Engine, SharedElements, SharedState, State};
-use crate::rpg::scene::battle::create_battle_scene;
-use crate::rpg::scene::field::create_field_scene;
-use crate::rpg::scene::menu::create_menu_scene;
-use crate::rpg::scene::title::create_title_scene;
-use crate::ws::{PositionMessage, WebSocketWrapper};
+use crate::engine::application_types::StateType;
+use crate::engine::{Engine, Primitives, SharedElements, State};
 use crate::Position;
+use battle::BattleState;
+use field::FieldState;
+use item::Item;
+use menu::MenuState;
 use rand::Rng;
+use rpg_shared_state::RPGSharedState;
 use serde::{Deserialize, Serialize};
-use crate::svg::animation::Animation;
+use title::TitleState;
 
-pub mod scene;
-
-pub struct Item {
-    pub name: String,
-    item_type: ItemType,
-    consume_func: fn(&Item, &mut SharedState),
-    description: String,
-}
-
-impl Item {
-    pub fn new(name: &str) -> Item {
-        let item_type: ItemType = match name {
-            "薬草" => ItemType::Consumable,
-            "棍棒" => ItemType::Weapon,
-            _ => panic!(),
-        };
-        let description = match name {
-            "薬草" => "HPを30回復",
-            "棍棒" => "粗悪な武器",
-            _ => "",
-        }
-        .to_string();
-        fn consume_func(item: &Item, shared_state: &mut SharedState) {
-            match &item.item_type {
-                ItemType::Consumable => match item.name.as_str() {
-                    "薬草" => {
-                        shared_state.characters[0].current_hp =
-                            shared_state.characters[0].max_hp.min(shared_state.characters[0].current_hp + 30);
-                    }
-                    _ => {}
-                },
-                _ => return,
-            }
-        }
-        Item {
-            name: name.to_string(),
-            item_type,
-            consume_func,
-            description,
-        }
-    }
-}
-
-pub enum ItemType {
-    Weapon,
-    Consumable,
-}
+pub mod battle;
+pub mod field;
+mod item;
+pub mod menu;
+pub mod rpg_shared_state;
+pub mod title;
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveData {
@@ -148,35 +107,11 @@ pub struct Character {
     pub inventory: Vec<Item>,
 }
 
-pub struct RPGSharedState {
-    pub user_name: String,
-    pub scene_index: usize,
-    pub requested_scene_index: usize,
-    pub map_index: usize,
-    pub requested_map_index: usize,
-    pub interrupt_animations: Vec<Vec<Animation>>,
-    pub has_message: bool,
-    pub elements: SharedElements,
-    pub treasure_box_opened: Vec<Vec<usize>>,
-    pub save_data: SaveData,
-    pub online_users: Vec<PositionMessage>,
-    pub to_send_channel_messages: Vec<String>
-}
-
 pub fn mount() -> Engine {
     let mut rng = rand::thread_rng();
     let random_number = rng.random::<u16>();
     let user_name = random_number.to_string();
-    let web_socket_wrapper = WebSocketWrapper::new(user_name.to_owned());
-    let mut shared_state = SharedState {
-        user_name: user_name.to_owned(),
-        has_message: false,
-        scene_index: 0,
-        requested_scene_index: 0,
-        map_index: 0,
-        requested_map_index: 0,
-        interrupt_animations: vec![],
-        elements: SharedElements::new(),
+    let rpg_shared_state = RPGSharedState {
         treasure_box_opened: vec![],
         save_data: SaveData::empty(),
         online_users: vec![],
@@ -188,36 +123,27 @@ pub fn mount() -> Engine {
             inventory: vec![],
         }],
     };
-    let mut rpg_shared_state = RPGSharedState {
+    let mut shared_state = State {
         user_name: user_name.to_owned(),
-        has_message: false,
-        scene_index: 0,
-        requested_scene_index: 0,
-        map_index: 0,
-        requested_map_index: 0,
-        interrupt_animations: vec![],
-        elements: SharedElements::new(),
-        treasure_box_opened: vec![],
-        save_data: SaveData::empty(),
-        online_users: vec![],
         to_send_channel_messages: vec![],
+        elements: SharedElements::new(),
+        interrupt_animations: vec![],
+        state_type: StateType::RPGShared(rpg_shared_state),
+        primitives: Primitives {
+            has_message: false,
+            scene_index: 0,
+            requested_scene_index: 0,
+            map_index: 0,
+            requested_map_index: 0,
+        },
     };
     let scenes = vec![
-        create_title_scene(&mut shared_state),
-        create_field_scene(&mut shared_state),
-        create_battle_scene(&mut shared_state),
-        create_menu_scene(&mut shared_state),
+        TitleState::create_title_scene(&mut shared_state),
+        FieldState::create_field_scene(&mut shared_state),
+        BattleState::create_battle_scene(&mut shared_state),
+        MenuState::create_menu_scene(&mut shared_state),
     ];
-    let mut engine = Engine::new(
-        ApplicationType::RPG,
-        State {
-            to_send_channel_messages: vec![],
-            state_type: StateType::RPGShared(rpg_shared_state),
-        },
-        shared_state,
-        scenes,
-        web_socket_wrapper,
-    );
+    let mut engine = Engine::new(shared_state, scenes);
     engine.init();
     engine
 }

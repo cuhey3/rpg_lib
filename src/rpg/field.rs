@@ -1,9 +1,12 @@
-use crate::engine::SharedState;
-use crate::rpg::scene::field::EventType::*;
-use crate::rpg::scene::Scene;
-use crate::rpg::scene::SceneType::Field;
+use crate::engine::application_types::SceneType::RPGField;
+use crate::engine::application_types::StateType;
+use crate::engine::scene::Scene;
+use crate::engine::{Primitives, SharedElements, State};
+use crate::rpg::field::EventType::*;
+use crate::rpg::item::Item;
+use crate::rpg::RPGSharedState;
 use crate::ws::{ChannelMessage, MessageType, PositionMessage};
-use crate::{Animation, Item, Position};
+use crate::{Animation, Position};
 use wasm_bindgen_test::console_log;
 use web_sys::{Document, Element};
 
@@ -16,16 +19,59 @@ pub struct FieldState {
 }
 
 impl FieldState {
+    pub fn create_field_scene(shared_state: &mut State) -> Scene {
+        if let State {
+            state_type: StateType::RPGShared(rpg_shared_state),
+            elements,
+            ..
+        } = shared_state
+        {
+            let mut map = Map::init_1();
+            map.init_treasure_box_opened(rpg_shared_state);
+            map.draw(rpg_shared_state, elements);
+            let character_direction_element = shared_state
+                .elements
+                .document
+                .query_selector(".character.direction")
+                .unwrap()
+                .unwrap();
+            let field_state = FieldState {
+                character_direction_element,
+                wrapper_element: shared_state
+                    .elements
+                    .document
+                    .query_selector("#field-wrapper")
+                    .unwrap()
+                    .unwrap(),
+                wrapper_translate_x: 0,
+                wrapper_translate_y: 0,
+                maps: vec![map, Map::init_2(), Map::init_3()],
+            };
+            let consume_func = field_state.create_consume_func();
+            let init_func = field_state.create_init_func();
+            let scene_type = RPGField(field_state);
+            Scene {
+                element_id: "field".to_string(),
+                scene_type,
+                consume_func,
+                init_func,
+            }
+        } else {
+            panic!()
+        }
+    }
     pub fn move_to(
         &mut self,
-        shared_state: &mut SharedState,
+        rpg_shared_state: &mut RPGSharedState,
+        primitives: &mut Primitives,
+        interrupt_animations: &mut Vec<Vec<Animation>>,
         key: String,
     ) {
-        let map = &mut self.maps[shared_state.map_index];
+        let map = &mut self.maps[primitives.map_index];
         // let start_x: i32 = characters[0].position.x;
         // let start_y: i32 = characters[0].position.y;
-        let mut x: i32 = shared_state.characters[0].position.x.to_owned();
-        let mut y: i32 = shared_state.characters[0].position.y.to_owned();
+        let mut x: i32 = rpg_shared_state.characters[0].position.x.to_owned();
+        let mut y: i32 = rpg_shared_state.characters[0].position.y.to_owned();
         let original_translate_x = self.wrapper_translate_x.to_owned();
         let original_translate_y = self.wrapper_translate_y.to_owned();
         match key.as_str() {
@@ -55,7 +101,7 @@ impl FieldState {
         if found_event.is_none() {
             match key.as_str() {
                 "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
-                    shared_state.characters[0].position = Position::new(x, y);
+                    rpg_shared_state.characters[0].position = Position::new(x, y);
                     self.update_character_position(x, y);
                     // self.character_position = Position::new(x, y);
                     // shared_state.interrupt_animations.push(vec![Animation::create_move(start_x, start_y, x, y)]);
@@ -67,10 +113,8 @@ impl FieldState {
         let found_event = found_event.unwrap();
         match found_event.1 {
             Enemy => {
-                shared_state.requested_scene_index += 1;
-                shared_state
-                    .interrupt_animations
-                    .push(vec![Animation::create_fade_out_in()]);
+                primitives.requested_scene_index += 1;
+                interrupt_animations.push(vec![Animation::create_fade_out_in()]);
                 self.reset_translate(original_translate_x, original_translate_y);
                 return;
             }
@@ -88,7 +132,7 @@ impl FieldState {
                     .enumerate()
                     .find(|(_, tuple)| tuple.0.x == x && tuple.0.y == y);
                 let treasure_index = found_treasure_box.unwrap().0;
-                let opened = shared_state.treasure_box_opened[map.map_index]
+                let opened = rpg_shared_state.treasure_box_opened[map.map_index]
                     .iter()
                     .find(|index| **index == treasure_index)
                     .is_some();
@@ -96,19 +140,19 @@ impl FieldState {
                     self.reset_translate(original_translate_x, original_translate_y);
                     return;
                 }
-                shared_state.treasure_box_opened[map.map_index].push(treasure_index);
+                rpg_shared_state.treasure_box_opened[map.map_index].push(treasure_index);
                 map.treasure_elements[treasure_index]
                     .set_attribute("fill", "gray")
                     .unwrap();
-                shared_state.has_message = true;
+                primitives.has_message = true;
                 let item = map.treasure_items.get(treasure_index).unwrap();
-                shared_state.characters[0].inventory.push(Item::new(&item.name));
-                shared_state
-                    .interrupt_animations
-                    .push(vec![Animation::create_message(format!(
-                        "{}を手に入れた",
-                        item.name
-                    ))]);
+                rpg_shared_state.characters[0]
+                    .inventory
+                    .push(Item::new(&item.name));
+                interrupt_animations.push(vec![Animation::create_message(format!(
+                    "{}を手に入れた",
+                    item.name
+                ))]);
                 self.reset_translate(original_translate_x, original_translate_y);
                 return;
             }
@@ -118,16 +162,14 @@ impl FieldState {
             }
             MapConnection(map_connection_detail) => {
                 self.update_character_position(x, y);
-                shared_state.characters[0].position = Position::new(
+                rpg_shared_state.characters[0].position = Position::new(
                     map_connection_detail.to_position.x,
                     map_connection_detail.to_position.y,
                 );
                 self.reset_translate(original_translate_x, original_translate_y);
-                shared_state.requested_map_index =
-                    (shared_state.map_index as i32 + map_connection_detail.index_addition) as usize;
-                shared_state
-                    .interrupt_animations
-                    .push(vec![Animation::create_fade_out_in()]);
+                primitives.requested_map_index =
+                    (primitives.map_index as i32 + map_connection_detail.index_addition) as usize;
+                interrupt_animations.push(vec![Animation::create_fade_out_in()]);
                 return;
             }
         }
@@ -152,128 +194,160 @@ impl FieldState {
             )
             .unwrap();
     }
-    pub fn create_init_func(&self) -> fn(&mut Scene, &mut SharedState) {
-        fn init_func(
-            scene: &mut Scene,
-            shared_state: &mut SharedState,
-        ) {
-            shared_state.elements.field_scene.show();
-            match &mut scene.scene_type {
-                Field(field_state) => {
-                    field_state.maps[shared_state.map_index].draw(shared_state);
-                    field_state.update_character_position(
-                        shared_state.characters[0].position.x,
-                        shared_state.characters[0].position.y,
-                    );
+    pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
+        fn init_func(scene: &mut Scene, shared_state: &mut State) {
+            if let State {
+                state_type: StateType::RPGShared(rpg_shared_state),
+                primitives,
+                elements,
+                ..
+            } = shared_state
+            {
+                elements.field_scene.show();
+                match &mut scene.scene_type {
+                    RPGField(field_state) => {
+                        field_state.maps[primitives.map_index].draw(rpg_shared_state, elements);
+                        field_state.update_character_position(
+                            rpg_shared_state.characters[0].position.x,
+                            rpg_shared_state.characters[0].position.y,
+                        );
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
 
-            if shared_state.characters[0].position.x == -1 && shared_state.characters[0].position.y == -1 {
-                shared_state.characters[0].position = Position::new(360, 280);
+                if rpg_shared_state.characters[0].position.x == -1
+                    && rpg_shared_state.characters[0].position.y == -1
+                {
+                    rpg_shared_state.characters[0].position = Position::new(360, 280);
+                }
+                console_log!("init end");
             }
-
-            console_log!("init end");
         }
         init_func
     }
-    pub fn create_consume_func(
-        &self,
-    ) -> fn(&mut Scene, &mut SharedState, String) {
-        fn consume_func(
-            scene: &mut Scene,
-            shared_state: &mut SharedState,
-            key: String,
-        ) {
-            match &mut scene.scene_type {
-                Field(field_state) => {
-                    let direction_string = match key.as_str() {
-                        "ArrowUp" => "↑",
-                        "ArrowDown" => "↓",
-                        "ArrowRight" => "→",
-                        "ArrowLeft" => "←",
-                        _ => "",
-                    };
-                    if direction_string != "" {
-                        field_state
-                            .character_direction_element
-                            .set_inner_html(direction_string);
-                    }
-                    match key.as_str() {
-                        "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
-                            field_state.move_to(shared_state, key.to_owned());
-                            let message = PositionMessage {
-                                user_name: shared_state.user_name.to_owned(),
-                                direction: key.to_owned(),
-                                position_x: shared_state.characters[0].position.x,
-                                position_y: shared_state.characters[0].position.y,
-                                map_index: shared_state.requested_map_index,
-                            };
-                            shared_state
-                                .to_send_channel_messages.push(serde_json::to_string(&message).unwrap());
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
+        fn consume_func(scene: &mut Scene, shared_state: &mut State, key: String) {
+            if let State {
+                state_type: StateType::RPGShared(rpg_shared_state),
+                primitives,
+                interrupt_animations,
+                to_send_channel_messages,
+                ..
+            } = shared_state
+            {
+                match &mut scene.scene_type {
+                    RPGField(field_state) => {
+                        let direction_string = match key.as_str() {
+                            "ArrowUp" => "↑",
+                            "ArrowDown" => "↓",
+                            "ArrowRight" => "→",
+                            "ArrowLeft" => "←",
+                            _ => "",
+                        };
+                        if direction_string != "" {
+                            field_state
+                                .character_direction_element
+                                .set_inner_html(direction_string);
                         }
-                        "Escape" => {
-                            shared_state.requested_scene_index += 2;
+                        match key.as_str() {
+                            "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
+                                field_state.move_to(
+                                    rpg_shared_state,
+                                    primitives,
+                                    interrupt_animations,
+                                    key.to_owned(),
+                                );
+                                let message = PositionMessage {
+                                    user_name: shared_state.user_name.to_owned(),
+                                    direction: key.to_owned(),
+                                    position_x: rpg_shared_state.characters[0].position.x,
+                                    position_y: rpg_shared_state.characters[0].position.y,
+                                    map_index: primitives.requested_map_index,
+                                };
+                                to_send_channel_messages
+                                    .push(serde_json::to_string(&message).unwrap());
+                            }
+                            "Escape" => {
+                                primitives.requested_scene_index += 2;
+                            }
+                            _ => (),
                         }
-                        _ => (),
                     }
+                    _ => panic!(),
                 }
-                _ => panic!(),
             }
         }
         consume_func
     }
-    pub fn update_map(&mut self, shared_state: &mut SharedState) {
-        let map = &mut self.maps[shared_state.map_index];
-        map.init_treasure_box_opened(shared_state);
-        map.draw(shared_state);
-        self.update_character_position(shared_state.characters[0].position.x, shared_state.characters[0].position.y);
+    pub fn update_map(&mut self, shared_state: &mut State) {
+        if let State {
+            state_type: StateType::RPGShared(rpg_shared_state),
+            primitives,
+            elements,
+            ..
+        } = shared_state
+        {
+            let map = &mut self.maps[primitives.map_index];
+            map.init_treasure_box_opened(rpg_shared_state);
+            map.draw(rpg_shared_state, elements);
+            self.update_character_position(
+                rpg_shared_state.characters[0].position.x,
+                rpg_shared_state.characters[0].position.y,
+            );
+        }
     }
 
-    pub fn consume_channel_message(
-        &mut self,
-        message: &ChannelMessage,
-        shared_state: &mut SharedState,
-    ) {
-        let found = shared_state
-            .online_users
-            .iter_mut()
-            .enumerate()
-            .find(|(_, user)| user.user_name == message.user_name);
-        match message.message_type {
-            MessageType::Left => {
-                if found.is_some() {
-                    let remove_index = found.unwrap().0;
-                    shared_state.online_users.remove(remove_index);
-                }
-            }
-            MessageType::Message => {
-                if let Ok(online_user) = serde_json::from_str::<PositionMessage>(&message.message) {
+    pub fn consume_channel_message(&mut self, message: &ChannelMessage, shared_state: &mut State) {
+        if let State {
+            state_type: StateType::RPGShared(rpg_shared_state),
+            primitives,
+            elements,
+            ..
+        } = shared_state
+        {
+            let found = rpg_shared_state
+                .online_users
+                .iter_mut()
+                .enumerate()
+                .find(|(_, user)| user.user_name == message.user_name);
+            match message.message_type {
+                MessageType::Left => {
                     if found.is_some() {
-                        let found = found.unwrap().1;
-                        found.map_index = online_user.map_index;
-                        found.direction = online_user.direction;
-                        found.position_x = online_user.position_x;
-                        found.position_y = online_user.position_y;
-                    } else {
-                        shared_state.online_users.push(online_user);
+                        let remove_index = found.unwrap().0;
+                        rpg_shared_state.online_users.remove(remove_index);
                     }
-                } else if let Ok(message) = serde_json::from_str::<ChannelMessage>(&message.message)
-                {
-                    match message.message_type {
-                        MessageType::Left => {
-                            if found.is_some() {
-                                let remove_index = found.unwrap().0;
-                                shared_state.online_users.remove(remove_index);
-                            }
+                }
+                MessageType::Message => {
+                    if let Ok(online_user) =
+                        serde_json::from_str::<PositionMessage>(&message.message)
+                    {
+                        if found.is_some() {
+                            let found = found.unwrap().1;
+                            found.map_index = online_user.map_index;
+                            found.direction = online_user.direction;
+                            found.position_x = online_user.position_x;
+                            found.position_y = online_user.position_y;
+                        } else {
+                            rpg_shared_state.online_users.push(online_user);
                         }
-                        _ => {}
-                    }
-                };
+                    } else if let Ok(message) =
+                        serde_json::from_str::<ChannelMessage>(&message.message)
+                    {
+                        match message.message_type {
+                            MessageType::Left => {
+                                if found.is_some() {
+                                    let remove_index = found.unwrap().0;
+                                    rpg_shared_state.online_users.remove(remove_index);
+                                }
+                            }
+                            _ => {}
+                        }
+                    };
+                }
+                _ => {}
             }
-            _ => {}
+            self.maps[primitives.map_index].draw(rpg_shared_state, elements);
         }
-        self.maps[shared_state.map_index].draw(shared_state);
     }
 }
 
@@ -560,14 +634,14 @@ impl Map {
         };
         map
     }
-    fn init_treasure_box_opened(&mut self, shared_state: &mut SharedState) {
-        let treasure_box_opened = &mut shared_state.treasure_box_opened;
+    fn init_treasure_box_opened(&mut self, rpg_shared_state: &mut RPGSharedState) {
+        let treasure_box_opened = &mut rpg_shared_state.treasure_box_opened;
         while treasure_box_opened.len() <= self.map_index {
             treasure_box_opened.push(vec![]);
         }
     }
-    fn draw(&mut self, shared_state: &SharedState) {
-        let ref document = shared_state.elements.document;
+    fn draw(&mut self, rpg_shared_state: &mut RPGSharedState, elements: &mut SharedElements) {
+        let ref document = elements.document;
         let wrapper_element = document.query_selector("#field-wrapper").unwrap().unwrap();
         while {
             let child = wrapper_element.child_nodes().get(0);
@@ -597,17 +671,21 @@ impl Map {
             .set_attribute("height", &*self.ground_height.to_string())
             .unwrap();
         wrapper_element.append_child(&*ground).unwrap();
-        let treasure_box_opened = &shared_state.treasure_box_opened[self.map_index];
+        let treasure_box_opened = &rpg_shared_state.treasure_box_opened[self.map_index];
         self.events_to_elements(document, &wrapper_element, treasure_box_opened);
-        self.draw_online_user(shared_state);
+        self.draw_online_user(rpg_shared_state, elements);
     }
-    pub fn draw_online_user(&mut self, shared_state: &SharedState) {
+    pub fn draw_online_user(
+        &mut self,
+        rpg_shared_state: &mut RPGSharedState,
+        elements: &mut SharedElements,
+    ) {
         let map_index = self.map_index;
-        for user in shared_state.online_users.iter() {
+        for user in rpg_shared_state.online_users.iter() {
             if user.map_index != map_index {
                 continue;
             }
-            let ref document = shared_state.elements.document;
+            let ref document = elements.document;
             let wrapper_element = document.query_selector("#field-wrapper").unwrap().unwrap();
             let rect = document
                 .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "rect")
@@ -648,37 +726,4 @@ enum EventType {
     TreasureBox,
     Obstacle(ObstacleType),
     MapConnection(MapConnectionDetail),
-}
-
-pub fn create_field_scene(shared_state: &mut SharedState) -> Scene {
-    let mut map = Map::init_1();
-    map.init_treasure_box_opened(shared_state);
-    map.draw(shared_state);
-    let character_direction_element = shared_state
-        .elements
-        .document
-        .query_selector(".character.direction")
-        .unwrap()
-        .unwrap();
-    let field_state = FieldState {
-        character_direction_element,
-        wrapper_element: shared_state
-            .elements
-            .document
-            .query_selector("#field-wrapper")
-            .unwrap()
-            .unwrap(),
-        wrapper_translate_x: 0,
-        wrapper_translate_y: 0,
-        maps: vec![map, Map::init_2(), Map::init_3()],
-    };
-    let consume_func = field_state.create_consume_func();
-    let init_func = field_state.create_init_func();
-    let scene_type = Field(field_state);
-    Scene {
-        element_id: "field".to_string(),
-        scene_type,
-        consume_func,
-        init_func,
-    }
 }

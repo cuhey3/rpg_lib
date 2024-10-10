@@ -1,82 +1,77 @@
-use crate::application_types::{ApplicationType, StateType};
-use crate::rpg::scene::Scene;
-use crate::rpg::scene::SceneType::Field;
-use crate::rpg::{Character, SaveData};
+use crate::engine::application_types::StateType;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
-use crate::ws::{ChannelMessage, PositionMessage, WebSocketWrapper};
+use crate::ws::{ChannelMessage, WebSocketWrapper};
 use crate::Position;
+use application_types::SceneType::RPGField;
+use scene::Scene;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_test::console_log;
 use web_sys::{Document, WebSocket};
 
+pub mod application_types;
+pub mod scene;
+
 #[wasm_bindgen]
 pub struct Engine {
     scenes: Vec<Scene>,
-    shared_state: SharedState,
     web_socket_wrapper: WebSocketWrapper,
-    application_type: ApplicationType,
-    state: State,
+    shared_state: State,
 }
 
 #[wasm_bindgen]
 impl Engine {
     pub(crate) fn new(
-        application_type: ApplicationType,
-        state: State,
-        shared_state: SharedState,
+        shared_state: State,
         scenes: Vec<Scene>,
-        web_socket_wrapper: WebSocketWrapper,
     ) -> Engine {
+        let web_socket_wrapper = WebSocketWrapper::new(shared_state.user_name.to_owned());
         Engine {
-            application_type,
             scenes,
             shared_state,
             web_socket_wrapper,
-            state,
         }
     }
 
     pub(crate) fn init(&mut self) {
         let init_func = self.scenes[0].init_func;
-        init_func(
-            &mut self.scenes[0],
-            &mut self.shared_state,
-        );
+        init_func(&mut self.scenes[0], &mut self.shared_state);
     }
 
     pub fn set_web_socket_instance(&mut self, web_socket: WebSocket) {
         self.web_socket_wrapper.update_web_socket(web_socket);
     }
     pub fn keydown(&mut self, key: String) {
-        if self.shared_state.has_message {
+        if self.shared_state.primitives.has_message {
             self.shared_state.elements.message.hide();
-            self.shared_state.has_message = false;
+            self.shared_state.primitives.has_message = false;
             return;
         }
         if self.has_animation_blocking_scene_update() {
             console_log!("keydown interrupt {:?}", key);
             return;
         }
-        let scene_index = self.shared_state.scene_index;
+        let scene_index = self.shared_state.primitives.scene_index;
         let consume_func = self.scenes[scene_index].consume_func;
         console_log!("consume start scene: {:?}", scene_index);
-        consume_func(
-            &mut self.scenes[scene_index],
-            &mut self.shared_state,
-            key,
-        );
+        consume_func(&mut self.scenes[scene_index], &mut self.shared_state, key);
         while !self.shared_state.to_send_channel_messages.is_empty() {
             let message = self.shared_state.to_send_channel_messages.remove(0);
             self.web_socket_wrapper.send_message(message);
         }
         if !self.has_animation_blocking_scene_update() {
-            if self.shared_state.scene_index != self.shared_state.requested_scene_index {
-                self.shared_state.scene_index = self.shared_state.requested_scene_index;
+            if self.shared_state.primitives.scene_index
+                != self.shared_state.primitives.requested_scene_index
+            {
+                self.shared_state.primitives.scene_index =
+                    self.shared_state.primitives.requested_scene_index;
                 self.on_scene_update()
             }
-            if self.shared_state.map_index != self.shared_state.requested_map_index {
-                self.shared_state.map_index = self.shared_state.requested_map_index;
+            if self.shared_state.primitives.map_index
+                != self.shared_state.primitives.requested_map_index
+            {
+                self.shared_state.primitives.map_index =
+                    self.shared_state.primitives.requested_map_index;
                 self.on_map_update();
             }
         }
@@ -96,7 +91,7 @@ impl Engine {
             let func = animation.get(0).unwrap().animation_func;
             let result = func(
                 animation.get_mut(0).unwrap(),
-                self.shared_state.has_message,
+                self.shared_state.primitives.has_message,
                 step,
             );
             if result {
@@ -126,19 +121,28 @@ impl Engine {
             .len()
             == 0
         {
-            if self.shared_state.scene_index != self.shared_state.requested_scene_index {
-                self.shared_state.scene_index = self.shared_state.requested_scene_index;
+            if self.shared_state.primitives.scene_index
+                != self.shared_state.primitives.requested_scene_index
+            {
+                self.shared_state.primitives.scene_index =
+                    self.shared_state.primitives.requested_scene_index;
                 self.on_scene_update()
             }
-            if self.shared_state.map_index != self.shared_state.requested_map_index {
-                self.shared_state.map_index = self.shared_state.requested_map_index;
+            if self.shared_state.primitives.map_index
+                != self.shared_state.primitives.requested_map_index
+            {
+                self.shared_state.primitives.map_index =
+                    self.shared_state.primitives.requested_map_index;
                 self.on_map_update();
             }
         }
     }
     fn on_scene_update(&mut self) {
-        console_log!("scene_updated {:?}", self.shared_state.scene_index);
-        let scene_index = self.shared_state.scene_index;
+        console_log!(
+            "scene_updated {:?}",
+            self.shared_state.primitives.scene_index
+        );
+        let scene_index = self.shared_state.primitives.scene_index;
         if scene_index != 0 && !self.web_socket_wrapper.is_joined {
             self.web_socket_wrapper.join();
         }
@@ -154,16 +158,15 @@ impl Engine {
         }
         let init_func = self.scenes[scene_index].init_func;
 
-        init_func(
-            &mut self.scenes[scene_index],
-            &mut self.shared_state,
-        );
+        init_func(&mut self.scenes[scene_index], &mut self.shared_state);
     }
 
     fn on_map_update(&mut self) {
-        let scene = &mut self.scenes[self.shared_state.scene_index];
+        let scene = &mut self.scenes[self.shared_state.primitives.scene_index];
+        // TODO
+        // RPGに依存しないコードにしないといけない
         match scene.scene_type {
-            Field(ref mut field_state) => {
+            RPGField(ref mut field_state) => {
                 field_state.update_map(&mut self.shared_state);
             }
             _ => {}
@@ -184,7 +187,7 @@ impl Engine {
             }
             for scene in self.scenes.iter_mut() {
                 if let Scene {
-                    scene_type: Field(field_state),
+                    scene_type: RPGField(field_state),
                     ..
                 } = scene
                 {
@@ -233,51 +236,6 @@ impl Position {
     }
 }
 
-pub struct SharedState {
-    pub user_name: String,
-    pub scene_index: usize,
-    pub requested_scene_index: usize,
-    pub map_index: usize,
-    pub requested_map_index: usize,
-    pub interrupt_animations: Vec<Vec<Animation>>,
-    pub has_message: bool,
-    pub elements: SharedElements,
-    pub treasure_box_opened: Vec<Vec<usize>>,
-    pub save_data: SaveData,
-    pub online_users: Vec<PositionMessage>,
-    pub to_send_channel_messages: Vec<String>,
-    pub characters: Vec<Character>,
-}
-
-impl SharedState {
-    pub fn update_save_data(&mut self) {
-        self.save_data
-            .update(&mut self.characters, &self.treasure_box_opened, self.map_index);
-    }
-    pub fn load_save_data(&mut self) {
-        self.save_data.load(&mut self.characters, true);
-        self.treasure_box_opened = self.save_data.treasure_box_usize.to_vec();
-        self.map_index = *self.save_data.map_usize.get(0).unwrap();
-        self.requested_map_index = *self.save_data.map_usize.get(0).unwrap();
-    }
-    pub fn new_game(&mut self) {
-        let mut new_save_data = SaveData::empty();
-        new_save_data.load(&mut self.characters, false);
-        self.treasure_box_opened = new_save_data.treasure_box_usize.to_vec();
-        console_log!(
-            "new_game map1 {} {}",
-            self.map_index,
-            new_save_data.map_usize.get(0).unwrap()
-        );
-        self.map_index = *new_save_data.map_usize.get(0).unwrap();
-        self.requested_map_index = *new_save_data.map_usize.get(0).unwrap();
-        console_log!(
-            "new_game map2 {} {}",
-            self.map_index,
-            new_save_data.map_usize.get(0).unwrap()
-        );
-    }
-}
 pub struct SharedElements {
     pub message: ElementWrapper,
     pub document: Document,
@@ -302,7 +260,19 @@ impl SharedElements {
     }
 }
 
+pub struct Primitives {
+    pub has_message: bool,
+    pub scene_index: usize,
+    pub requested_scene_index: usize,
+    pub map_index: usize,
+    pub requested_map_index: usize,
+}
+
 pub struct State {
+    pub user_name: String,
     pub to_send_channel_messages: Vec<String>,
     pub state_type: StateType,
+    pub elements: SharedElements,
+    pub interrupt_animations: Vec<Vec<Animation>>,
+    pub primitives: Primitives,
 }
