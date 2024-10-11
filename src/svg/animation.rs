@@ -1,8 +1,8 @@
+use crate::engine::References;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen_test::console_log;
 use web_sys::Element;
-use crate::engine::References;
 
 pub struct Animation {
     pub args_i32: Vec<i32>,
@@ -108,7 +108,9 @@ impl Animation {
             document.get_element_by_id("message").unwrap(),
             document.get_element_by_id("message-1").unwrap(),
             document.get_element_by_id("message-2").unwrap(),
-            document.get_element_by_id("has-continuous-message").unwrap(),
+            document
+                .get_element_by_id("has-continuous-message")
+                .unwrap(),
         ];
         Animation {
             args_i32: vec![],
@@ -137,8 +139,14 @@ impl Animation {
                     }
                 }
                 let has_continuous_message = animation.messages.len() > 2;
-                let display = if has_continuous_message {"block"} else {"none"};
-                animation.elements[3].set_attribute("display", display).unwrap();
+                let display = if has_continuous_message {
+                    "block"
+                } else {
+                    "none"
+                };
+                animation.elements[3]
+                    .set_attribute("display", display)
+                    .unwrap();
                 (*references.borrow_mut()).has_continuous_message = has_continuous_message;
                 (*references.borrow_mut()).has_message = !animation.messages.is_empty();
                 animation.block_scene_update = !animation.messages.is_empty();

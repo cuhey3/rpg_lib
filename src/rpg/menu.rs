@@ -173,7 +173,8 @@ impl MenuState {
                                                 return;
                                             }
                                             ItemType::Weapon => {
-                                                shared_state.references.borrow_mut().has_message = true;
+                                                shared_state.references.borrow_mut().has_message =
+                                                    true;
                                                 shared_state.interrupt_animations.push(vec![
                                                     Animation::create_message(
                                                         "武器は使用できません".to_string(),
@@ -225,7 +226,7 @@ impl MenuState {
                                         ]);
                                     }
                                     3 => {
-                                        shared_state.primitives.requested_scene_index -= 3;
+                                        shared_state.primitives.requested_scene_index = 0;
                                         shared_state
                                             .interrupt_animations
                                             .push(vec![Animation::create_fade_out_in()]);

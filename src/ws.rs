@@ -138,7 +138,7 @@ impl WebSocketWrapper {
         if !self.is_ready() {
             console_log!("reconnect websocket...");
             self.reconnect();
-            return
+            return;
         }
         self.ws
             .send_with_str(&serde_json::to_string(&message).unwrap())

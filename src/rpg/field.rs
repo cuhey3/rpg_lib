@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
@@ -9,6 +7,8 @@ use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
 use crate::ws::{ChannelMessage, MessageType};
 use crate::{Animation, Position};
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen_test::console_log;
 use web_sys::{Document, Element};
 

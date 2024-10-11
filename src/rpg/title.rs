@@ -1,4 +1,5 @@
 use crate::engine::application_types::SceneType::RPGTitle;
+use crate::engine::application_types::StateType::RPGShared;
 use crate::engine::scene::Scene;
 use crate::engine::State;
 use crate::rpg::RPGSharedState;
@@ -51,6 +52,17 @@ impl TitleState {
                             RPGSharedState::new_game(shared_state);
                         } else {
                             RPGSharedState::load_save_data(shared_state);
+                            if let State {
+                                state_type: RPGShared(rpg_shared_state),
+                                ..
+                            } = shared_state
+                            {
+                                let opening_end_flag =
+                                    rpg_shared_state.characters[0].event_flags.get(0);
+                                if opening_end_flag.is_some() && *opening_end_flag.unwrap() {
+                                    shared_state.primitives.requested_scene_index = 2;
+                                }
+                            }
                         }
                         shared_state
                             .interrupt_animations

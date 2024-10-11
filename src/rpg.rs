@@ -1,19 +1,21 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::engine::application_types::StateType;
 use crate::engine::{Engine, Primitives, References, SharedElements, State};
 use crate::ws::WebSocketWrapper;
 use crate::Position;
 use battle::BattleState;
+use event::EventState;
 use field::FieldState;
 use item::Item;
 use menu::MenuState;
 use rand::Rng;
 use rpg_shared_state::RPGSharedState;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::rc::Rc;
 use title::TitleState;
 
 pub mod battle;
+pub mod event;
 pub mod field;
 mod item;
 pub mod menu;
@@ -28,6 +30,7 @@ pub struct SaveData {
     map_i32: Vec<i32>,
     inventory_string: Vec<String>,
     check_token: u32,
+    event_flags: Vec<bool>,
 }
 
 impl SaveData {
@@ -43,6 +46,7 @@ impl SaveData {
                 self.map_usize = local_save_data.map_usize.to_vec();
                 self.map_i32 = local_save_data.map_i32.to_vec();
                 self.inventory_string = local_save_data.inventory_string.to_vec();
+                self.event_flags = local_save_data.event_flags.to_vec();
                 self.check_token = local_save_data.check_token.to_owned();
             }
         }
@@ -81,6 +85,7 @@ impl SaveData {
         map_usize: Vec<usize>,
         map_i32: Vec<i32>,
         inventory_string: Vec<String>,
+        event_flags: Vec<bool>,
     ) -> SaveData {
         SaveData {
             character_u32,
@@ -88,6 +93,7 @@ impl SaveData {
             map_usize,
             map_i32,
             inventory_string,
+            event_flags,
             check_token: 0,
         }
     }
@@ -98,6 +104,7 @@ impl SaveData {
             map_usize: vec![0],
             map_i32: vec![360, 280],
             inventory_string: vec![],
+            event_flags: vec![],
             check_token: 0,
         }
     }
@@ -108,6 +115,7 @@ pub struct Character {
     pub max_hp: u32,
     pub position: Position,
     pub inventory: Vec<Item>,
+    pub event_flags: Vec<bool>,
 }
 
 pub fn mount() -> Engine {
@@ -124,6 +132,7 @@ pub fn mount() -> Engine {
             max_hp: 80,
             position: Position { x: -1, y: -1 },
             inventory: vec![],
+            event_flags: vec![],
         }],
     };
     let mut shared_state = State {
@@ -141,10 +150,11 @@ pub fn mount() -> Engine {
         references: Rc::new(RefCell::new(References {
             has_message: false,
             has_continuous_message: false,
-        }))
+        })),
     };
     let mut scenes = vec![
         TitleState::create_title_scene(&mut shared_state),
+        EventState::create_event_scene(&mut shared_state),
         FieldState::create_field_scene(&mut shared_state),
         BattleState::create_battle_scene(&mut shared_state),
         MenuState::create_menu_scene(&mut shared_state),

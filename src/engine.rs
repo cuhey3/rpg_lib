@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::engine::application_types::StateType;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
@@ -8,6 +6,8 @@ use crate::Position;
 use application_types::SceneType::RPGField;
 use scene::Scene;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_test::console_log;
 use web_sys::Document;
@@ -38,7 +38,12 @@ impl Engine {
 
     pub fn keydown(&mut self, key: String) {
         if self.shared_state.references.borrow_mut().has_message {
-            if !self.shared_state.references.borrow_mut().has_continuous_message {
+            if !self
+                .shared_state
+                .references
+                .borrow_mut()
+                .has_continuous_message
+            {
                 self.shared_state.elements.message.hide();
             }
             (*self.shared_state.references.borrow_mut()).has_message = false;
@@ -150,7 +155,9 @@ impl Engine {
         if scene_index == 0 && self.web_socket_wrapper.state.borrow_mut().is_joined {
             self.web_socket_wrapper.left();
         }
-        if scene_index != 3 {
+        // TODO
+        // メニュー画面だけ特別扱いしていて、シーンを追加するとメニューのインデックスがずれる
+        if scene_index != 4 {
             for (index, scene) in self.scenes.iter_mut().enumerate() {
                 if index != scene_index {
                     scene.hide();
@@ -249,6 +256,7 @@ pub struct SharedElements {
     pub message: ElementWrapper,
     pub document: Document,
     pub title_scene: ElementWrapper,
+    pub event_scene: ElementWrapper,
     pub field_scene: ElementWrapper,
     pub battle_scene: ElementWrapper,
     pub menu_scene: ElementWrapper,
@@ -261,6 +269,7 @@ impl SharedElements {
         SharedElements {
             message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
             title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
+            event_scene: ElementWrapper::new(document.get_element_by_id("event").unwrap()),
             field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
             battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
             menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
@@ -287,5 +296,5 @@ pub struct State {
     pub elements: SharedElements,
     pub interrupt_animations: Vec<Vec<Animation>>,
     pub primitives: Primitives,
-    pub references: Rc<RefCell<References>>
+    pub references: Rc<RefCell<References>>,
 }
