@@ -2,7 +2,7 @@ use crate::engine::application_types::SceneType::RPGBattle;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
 use crate::engine::State;
-use crate::svg::animation::Animation;
+use crate::svg::animation::{Animation, AnimationSpan};
 use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::Cursor;
 use rand::{thread_rng, Rng};
@@ -95,6 +95,18 @@ impl BattleState {
                         }
                         "a" => {
                             if battle_state.command_cursor.choose_index != 1 {
+                                shared_state.primitives.requested_scene_index = 0;
+                                shared_state.references.borrow_mut().has_message = true;
+                                shared_state.interrupt_animations.push(vec![
+                                    Animation::create_multi_line_messages(vec![
+                                        "もう戦えない！".to_owned(),
+                                        "".to_owned(),
+                                        "目の前が真っ暗になった…".to_owned(),
+                                    ]),
+                                    Animation::create_fade_out_in_with_span(
+                                        AnimationSpan::FadeOutInLong,
+                                    ),
+                                ]);
                                 return;
                             }
                             if thread_rng().gen_bool(0.7_f64) {

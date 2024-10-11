@@ -10,6 +10,7 @@ pub struct Animation {
     pub animation_func: fn(&mut Animation, Rc<RefCell<References>>, step: f64) -> bool,
     pub elements: Vec<Element>,
     pub start_step: f64,
+    pub span: AnimationSpan,
     pub messages: Vec<String>,
 }
 
@@ -22,7 +23,11 @@ impl Animation {
     pub fn get_step_gap(&self, step: f64) -> f64 {
         step - self.start_step
     }
+
     pub fn create_fade_out_in() -> Animation {
+        Animation::create_fade_out_in_with_span(AnimationSpan::FadeOutInDefault)
+    }
+    pub fn create_fade_out_in_with_span(span: AnimationSpan) -> Animation {
         Animation {
             args_i32: vec![],
             messages: vec![],
@@ -35,8 +40,10 @@ impl Animation {
                 .query_selector("#fader rect")
                 .unwrap()
                 .unwrap()],
-            animation_func: |animation, _, step| {
-                let half_span = 250.0_f64;
+            span,
+            animation_func: move |animation, _, step| {
+                let span_f64 = animation.span.clone() as i32 as f64;
+                let half_span = span_f64 / 2.0;
                 let gap = animation.get_step_gap(step);
                 if gap < half_span {
                     animation
@@ -88,6 +95,7 @@ impl Animation {
             block_scene_update: true,
             start_step: -1.0,
             elements,
+            span: AnimationSpan::None,
             animation_func: |animation, references, _| {
                 let has_message = references.borrow_mut().has_message;
                 if has_message {
@@ -118,6 +126,7 @@ impl Animation {
             block_scene_update: true,
             start_step: -1.0,
             elements,
+            span: AnimationSpan::None,
             animation_func: |animation, references, _| {
                 let has_message = references.borrow_mut().has_message;
                 if has_message {
@@ -175,6 +184,7 @@ impl Animation {
                 character_direction_element,
                 wrapper_element,
             ],
+            span: AnimationSpan::None,
             animation_func: |animation, _, step| {
                 let scale = 150.0;
                 let gap = animation.get_step_gap(step).min(scale);
@@ -215,4 +225,11 @@ impl Animation {
             },
         }
     }
+}
+
+#[derive(Clone)]
+pub enum AnimationSpan {
+    FadeOutInDefault = 500,
+    FadeOutInLong = 2000,
+    None = 0,
 }
