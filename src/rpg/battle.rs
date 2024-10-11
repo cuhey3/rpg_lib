@@ -70,7 +70,6 @@ impl BattleState {
                 match &mut scene.scene_type {
                     RPGBattle(battle_state) => {
                         battle_state.command_cursor.reset();
-                        shared_state.references.borrow_mut().has_message = true;
                         shared_state
                             .interrupt_animations
                             .push(vec![Animation::create_message(
@@ -96,7 +95,7 @@ impl BattleState {
                         "a" => {
                             if battle_state.command_cursor.choose_index != 1 {
                                 shared_state.primitives.requested_scene_index = 0;
-                                shared_state.references.borrow_mut().has_message = true;
+                                //shared_state.references.borrow_mut().has_message = true;
                                 shared_state.interrupt_animations.push(vec![
                                     Animation::create_multi_line_messages(vec![
                                         "もう戦えない！".to_owned(),
@@ -110,7 +109,6 @@ impl BattleState {
                                 return;
                             }
                             if thread_rng().gen_bool(0.7_f64) {
-                                shared_state.references.borrow_mut().has_message = true;
                                 shared_state.primitives.requested_scene_index -= 1;
                                 battle_state.elements.command.hide();
                                 shared_state.interrupt_animations.push(vec![
@@ -118,7 +116,6 @@ impl BattleState {
                                     Animation::create_fade_out_in(),
                                 ]);
                             } else {
-                                shared_state.references.borrow_mut().has_message = true;
                                 shared_state.interrupt_animations.push(vec![
                                     Animation::create_message("逃げられなかった！".to_string()),
                                 ]);

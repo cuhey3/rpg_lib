@@ -91,22 +91,27 @@ impl Animation {
         ];
         Animation {
             args_i32: vec![],
-            messages: vec![message, "".to_string()],
+            messages: vec![message.to_owned()],
             block_scene_update: true,
             start_step: -1.0,
             elements,
             span: AnimationSpan::None,
             animation_func: |animation, references, _| {
-                let has_message = references.borrow_mut().has_message;
-                if has_message {
-                    animation.elements[0]
-                        .set_attribute("display", "block")
-                        .unwrap();
-                    animation.elements[1].set_inner_html(animation.messages.get(0).unwrap());
-                    animation.elements[2].set_inner_html(animation.messages.get(1).unwrap());
+                if references.borrow_mut().has_message {
+                    return false;
                 }
-                animation.block_scene_update = has_message;
-                !has_message
+                if animation.messages.is_empty() {
+                    animation.block_scene_update = false;
+                    return true;
+                }
+                animation.block_scene_update = true;
+                references.borrow_mut().has_message = true;
+                animation.elements[0]
+                    .set_attribute("display", "block")
+                    .unwrap();
+                animation.elements[1].set_inner_html(&animation.messages.remove(0));
+                animation.elements[2].set_inner_html("");
+                return false;
             },
         }
     }
@@ -128,26 +133,25 @@ impl Animation {
             elements,
             span: AnimationSpan::None,
             animation_func: |animation, references, _| {
-                let has_message = references.borrow_mut().has_message;
-                if has_message {
-                    animation.elements[0]
-                        .set_attribute("display", "block")
-                        .unwrap();
-                    animation.elements[1].set_inner_html(animation.messages.get(0).unwrap());
-                    if let Some(message2) = animation.messages.get(1) {
-                        animation.elements[2].set_inner_html(message2);
-                    } else {
-                        animation.elements[2].set_inner_html("");
-                    }
-                } else {
-                    if animation.messages.len() > 1 {
-                        animation.messages.remove(1);
-                    }
-                    if !animation.messages.is_empty() {
-                        animation.messages.remove(0);
-                    }
+                if references.borrow_mut().has_message {
+                    return false;
                 }
-                let has_continuous_message = animation.messages.len() > 2;
+                if animation.messages.is_empty() {
+                    animation.block_scene_update = false;
+                    return true;
+                }
+                animation.block_scene_update = true;
+                references.borrow_mut().has_message = true;
+                animation.elements[0]
+                    .set_attribute("display", "block")
+                    .unwrap();
+                animation.elements[1].set_inner_html(&animation.messages.remove(0));
+                if !animation.messages.is_empty() {
+                    animation.elements[2].set_inner_html(&animation.messages.remove(0));
+                } else {
+                    animation.elements[2].set_inner_html("");
+                }
+                let has_continuous_message = !animation.messages.is_empty();
                 let display = if has_continuous_message {
                     "block"
                 } else {
@@ -157,9 +161,7 @@ impl Animation {
                     .set_attribute("display", display)
                     .unwrap();
                 (*references.borrow_mut()).has_continuous_message = has_continuous_message;
-                (*references.borrow_mut()).has_message = !animation.messages.is_empty();
-                animation.block_scene_update = !animation.messages.is_empty();
-                animation.messages.is_empty()
+                return false;
             },
         }
     }

@@ -1,12 +1,12 @@
 use crate::engine::application_types::SceneType::RPGMenu;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{SharedElements, State};
+use crate::engine::State;
 use crate::rpg::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
-use crate::svg::Cursor;
+use crate::svg::{Cursor, SharedElements};
 use wasm_bindgen_test::console_log;
 use web_sys::Element;
 
@@ -135,7 +135,6 @@ impl MenuState {
                                         return;
                                     }
                                     if menu_state.inventory_confirm_opened {
-                                        shared_state.references.borrow_mut().has_message = true;
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message(
                                                 "薬草を使用しました。HPが30回復".to_string(),
@@ -220,7 +219,6 @@ impl MenuState {
                                                 .join(",")
                                         );
                                         RPGSharedState::update_save_data(shared_state);
-                                        shared_state.references.borrow_mut().has_message = true;
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message("セーブしました".to_string()),
                                         ]);

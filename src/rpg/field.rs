@@ -1,10 +1,11 @@
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{PositionMessage, Primitives, References, SharedElements, State};
+use crate::engine::{PositionMessage, Primitives, References, State};
 use crate::rpg::field::EventType::*;
 use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
+use crate::svg::SharedElements;
 use crate::ws::{ChannelMessage, MessageType};
 use crate::{Animation, Position};
 use std::cell::RefCell;
@@ -147,7 +148,6 @@ impl FieldState {
                 map.treasure_elements[treasure_index]
                     .set_attribute("fill", "gray")
                     .unwrap();
-                references.borrow_mut().has_message = true;
                 let item = map.treasure_items.get(treasure_index).unwrap();
                 rpg_shared_state.characters[0]
                     .inventory

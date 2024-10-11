@@ -1,3 +1,4 @@
+use crate::svg::element_wrapper::ElementWrapper;
 use web_sys::{Document, Element};
 
 pub mod animation;
@@ -49,5 +50,31 @@ impl Cursor {
         self.element
             .set_attribute("y", new_y.to_string().as_str())
             .unwrap();
+    }
+}
+
+pub struct SharedElements {
+    pub message: ElementWrapper,
+    pub document: Document,
+    pub title_scene: ElementWrapper,
+    pub event_scene: ElementWrapper,
+    pub field_scene: ElementWrapper,
+    pub battle_scene: ElementWrapper,
+    pub menu_scene: ElementWrapper,
+}
+
+impl SharedElements {
+    pub fn new() -> SharedElements {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        SharedElements {
+            message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
+            title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
+            event_scene: ElementWrapper::new(document.get_element_by_id("event").unwrap()),
+            field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
+            battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
+            menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
+            document,
+        }
     }
 }

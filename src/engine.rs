@@ -1,6 +1,6 @@
 use crate::engine::application_types::StateType;
 use crate::svg::animation::Animation;
-use crate::svg::element_wrapper::ElementWrapper;
+use crate::svg::SharedElements;
 use crate::ws::{ChannelMessage, WebSocketWrapper};
 use crate::Position;
 use application_types::SceneType::RPGField;
@@ -10,7 +10,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_test::console_log;
-use web_sys::Document;
 
 pub mod application_types;
 pub mod scene;
@@ -250,32 +249,6 @@ pub struct PositionMessage {
     pub position_x: i32,
     pub position_y: i32,
     pub map_index: usize,
-}
-
-pub struct SharedElements {
-    pub message: ElementWrapper,
-    pub document: Document,
-    pub title_scene: ElementWrapper,
-    pub event_scene: ElementWrapper,
-    pub field_scene: ElementWrapper,
-    pub battle_scene: ElementWrapper,
-    pub menu_scene: ElementWrapper,
-}
-
-impl SharedElements {
-    pub fn new() -> SharedElements {
-        let window = web_sys::window().unwrap();
-        let document = window.document().unwrap();
-        SharedElements {
-            message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
-            title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
-            event_scene: ElementWrapper::new(document.get_element_by_id("event").unwrap()),
-            field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
-            battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
-            menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
-            document,
-        }
-    }
 }
 
 pub struct Primitives {

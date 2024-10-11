@@ -1,5 +1,6 @@
 use crate::engine::application_types::StateType;
-use crate::engine::{Engine, Primitives, References, SharedElements, State};
+use crate::engine::{Engine, Primitives, References, State};
+use crate::svg::SharedElements;
 use crate::ws::WebSocketWrapper;
 use crate::Position;
 use battle::BattleState;
