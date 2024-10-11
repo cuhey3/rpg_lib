@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::engine::application_types::StateType;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
@@ -35,9 +37,11 @@ impl Engine {
     }
 
     pub fn keydown(&mut self, key: String) {
-        if self.shared_state.primitives.has_message {
-            self.shared_state.elements.message.hide();
-            self.shared_state.primitives.has_message = false;
+        if self.shared_state.references.borrow_mut().has_message {
+            if !self.shared_state.references.borrow_mut().has_continuous_message {
+                self.shared_state.elements.message.hide();
+            }
+            (*self.shared_state.references.borrow_mut()).has_message = false;
             return;
         }
         if self.has_animation_blocking_scene_update() {
@@ -88,7 +92,7 @@ impl Engine {
             let func = animation.get(0).unwrap().animation_func;
             let result = func(
                 animation.get_mut(0).unwrap(),
-                self.shared_state.primitives.has_message,
+                self.shared_state.references.clone(),
                 step,
             );
             if result {
@@ -266,13 +270,16 @@ impl SharedElements {
 }
 
 pub struct Primitives {
-    pub has_message: bool,
     pub scene_index: usize,
     pub requested_scene_index: usize,
     pub map_index: usize,
     pub requested_map_index: usize,
 }
 
+pub struct References {
+    pub has_message: bool,
+    pub has_continuous_message: bool,
+}
 pub struct State {
     pub user_name: String,
     pub to_send_channel_messages: Vec<String>,
@@ -280,4 +287,5 @@ pub struct State {
     pub elements: SharedElements,
     pub interrupt_animations: Vec<Vec<Animation>>,
     pub primitives: Primitives,
+    pub references: Rc<RefCell<References>>
 }

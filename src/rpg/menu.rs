@@ -135,7 +135,7 @@ impl MenuState {
                                         return;
                                     }
                                     if menu_state.inventory_confirm_opened {
-                                        shared_state.primitives.has_message = true;
+                                        shared_state.references.borrow_mut().has_message = true;
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message(
                                                 "薬草を使用しました。HPが30回復".to_string(),
@@ -173,7 +173,7 @@ impl MenuState {
                                                 return;
                                             }
                                             ItemType::Weapon => {
-                                                shared_state.primitives.has_message = true;
+                                                shared_state.references.borrow_mut().has_message = true;
                                                 shared_state.interrupt_animations.push(vec![
                                                     Animation::create_message(
                                                         "武器は使用できません".to_string(),
@@ -219,7 +219,7 @@ impl MenuState {
                                                 .join(",")
                                         );
                                         RPGSharedState::update_save_data(shared_state);
-                                        shared_state.primitives.has_message = true;
+                                        shared_state.references.borrow_mut().has_message = true;
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message("セーブしました".to_string()),
                                         ]);

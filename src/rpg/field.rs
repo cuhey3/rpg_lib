@@ -1,7 +1,9 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{PositionMessage, Primitives, SharedElements, State};
+use crate::engine::{PositionMessage, Primitives, References, SharedElements, State};
 use crate::rpg::field::EventType::*;
 use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
@@ -64,6 +66,7 @@ impl FieldState {
         &mut self,
         rpg_shared_state: &mut RPGSharedState,
         primitives: &mut Primitives,
+        references: Rc<RefCell<References>>,
         interrupt_animations: &mut Vec<Vec<Animation>>,
         key: String,
     ) {
@@ -144,7 +147,7 @@ impl FieldState {
                 map.treasure_elements[treasure_index]
                     .set_attribute("fill", "gray")
                     .unwrap();
-                primitives.has_message = true;
+                references.borrow_mut().has_message = true;
                 let item = map.treasure_items.get(treasure_index).unwrap();
                 rpg_shared_state.characters[0]
                     .inventory
@@ -230,6 +233,7 @@ impl FieldState {
             if let State {
                 state_type: StateType::RPGShared(rpg_shared_state),
                 primitives,
+                references,
                 interrupt_animations,
                 to_send_channel_messages,
                 ..
@@ -254,6 +258,7 @@ impl FieldState {
                                 field_state.move_to(
                                     rpg_shared_state,
                                     primitives,
+                                    references.clone(),
                                     interrupt_animations,
                                     key.to_owned(),
                                 );

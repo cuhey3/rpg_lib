@@ -1,10 +1,13 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen_test::console_log;
 use web_sys::Element;
+use crate::engine::References;
 
 pub struct Animation {
     pub args_i32: Vec<i32>,
     pub block_scene_update: bool,
-    pub animation_func: fn(&mut Animation, bool, step: f64) -> bool,
+    pub animation_func: fn(&mut Animation, Rc<RefCell<References>>, step: f64) -> bool,
     pub elements: Vec<Element>,
     pub start_step: f64,
     pub messages: Vec<String>,
@@ -85,7 +88,8 @@ impl Animation {
             block_scene_update: true,
             start_step: -1.0,
             elements,
-            animation_func: |animation, has_message, _| {
+            animation_func: |animation, references, _| {
+                let has_message = references.borrow_mut().has_message;
                 if has_message {
                     animation.elements[0]
                         .set_attribute("display", "block")
@@ -98,7 +102,50 @@ impl Animation {
             },
         }
     }
-
+    pub fn create_multi_line_messages(messages: Vec<String>) -> Animation {
+        let document = web_sys::window().unwrap().document().unwrap();
+        let elements = vec![
+            document.get_element_by_id("message").unwrap(),
+            document.get_element_by_id("message-1").unwrap(),
+            document.get_element_by_id("message-2").unwrap(),
+            document.get_element_by_id("has-continuous-message").unwrap(),
+        ];
+        Animation {
+            args_i32: vec![],
+            messages,
+            block_scene_update: true,
+            start_step: -1.0,
+            elements,
+            animation_func: |animation, references, _| {
+                let has_message = references.borrow_mut().has_message;
+                if has_message {
+                    animation.elements[0]
+                        .set_attribute("display", "block")
+                        .unwrap();
+                    animation.elements[1].set_inner_html(animation.messages.get(0).unwrap());
+                    if let Some(message2) = animation.messages.get(1) {
+                        animation.elements[2].set_inner_html(message2);
+                    } else {
+                        animation.elements[2].set_inner_html("");
+                    }
+                } else {
+                    if animation.messages.len() > 1 {
+                        animation.messages.remove(1);
+                    }
+                    if !animation.messages.is_empty() {
+                        animation.messages.remove(0);
+                    }
+                }
+                let has_continuous_message = animation.messages.len() > 2;
+                let display = if has_continuous_message {"block"} else {"none"};
+                animation.elements[3].set_attribute("display", display).unwrap();
+                (*references.borrow_mut()).has_continuous_message = has_continuous_message;
+                (*references.borrow_mut()).has_message = !animation.messages.is_empty();
+                animation.block_scene_update = !animation.messages.is_empty();
+                animation.messages.is_empty()
+            },
+        }
+    }
     pub fn create_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Animation {
         let document = web_sys::window().unwrap().document().unwrap();
         let wrapper_element = document.query_selector("#field-wrapper").unwrap().unwrap();

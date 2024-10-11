@@ -1,5 +1,7 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::engine::application_types::StateType;
-use crate::engine::{Engine, Primitives, SharedElements, State};
+use crate::engine::{Engine, Primitives, References, SharedElements, State};
 use crate::ws::WebSocketWrapper;
 use crate::Position;
 use battle::BattleState;
@@ -131,12 +133,15 @@ pub fn mount() -> Engine {
         interrupt_animations: vec![],
         state_type: StateType::RPGShared(rpg_shared_state),
         primitives: Primitives {
-            has_message: false,
             scene_index: 0,
             requested_scene_index: 0,
             map_index: 0,
             requested_map_index: 0,
         },
+        references: Rc::new(RefCell::new(References {
+            has_message: false,
+            has_continuous_message: false,
+        }))
     };
     let mut scenes = vec![
         TitleState::create_title_scene(&mut shared_state),
