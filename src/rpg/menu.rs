@@ -6,7 +6,7 @@ use crate::rpg::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
-use crate::svg::{Cursor, SharedElements};
+use crate::svg::{Cursor, CursorType, SharedElements};
 use wasm_bindgen_test::console_log;
 use web_sys::Element;
 
@@ -19,10 +19,10 @@ struct MenuElements {
 pub struct MenuState {
     inventory_opened: bool,
     inventory_confirm_opened: bool,
-    inventory_choose_index: usize,
     elements: MenuElements,
     cursor: Cursor,
     inventory_cursor: Cursor,
+    inventory_confirm_cursor: Cursor,
 }
 
 impl MenuState {
@@ -43,13 +43,14 @@ impl MenuState {
             inventories: vec![inventory1, inventory2],
             inventory_confirm,
         };
+        let mut inventory_confirm_cursor = Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
         let menu_state = MenuState {
             inventory_opened: false,
             inventory_confirm_opened: false,
-            inventory_choose_index: 0,
             elements,
             cursor: Cursor::new(document, "menu-cursor", 5, 45.0),
             inventory_cursor: Cursor::new(document, "inventory-cursor", 1, 45.0),
+            inventory_confirm_cursor,
         };
         let consume_func = menu_state.create_consume_func();
         let init_func = menu_state.create_init_func();
@@ -81,7 +82,7 @@ impl MenuState {
         }
         self.elements.inventory_container.show();
         self.inventory_opened = true;
-        let target_item = items.get(self.inventory_choose_index);
+        let target_item = items.get(self.inventory_cursor.choose_index);
         if target_item.is_some() {
             elements.message.show();
             elements
@@ -104,13 +105,17 @@ impl MenuState {
                     {
                         match key.as_str() {
                             "ArrowUp" | "ArrowDown" => {
+                                if menu_state.inventory_confirm_opened {
+                                    menu_state.inventory_confirm_cursor.consume(key);
+                                    return
+                                }
                                 if !menu_state.inventory_opened {
                                     menu_state.cursor.consume(key);
-                                    return;
+                                    return
                                 }
                                 let inventory_len = rpg_shared_state.characters[0].inventory.len();
                                 if inventory_len < 2 {
-                                    return;
+                                    return
                                 }
                                 menu_state
                                     .inventory_cursor
@@ -132,24 +137,59 @@ impl MenuState {
                             "a" => {
                                 if menu_state.inventory_opened {
                                     if rpg_shared_state.characters[0].inventory.is_empty() {
-                                        return;
+                                        return
                                     }
                                     if menu_state.inventory_confirm_opened {
-                                        shared_state.interrupt_animations.push(vec![
-                                            Animation::create_message(
-                                                "薬草を使用しました。HPが30回復".to_string(),
-                                            ),
-                                        ]);
+                                        if menu_state.inventory_confirm_cursor.choose_index == 1 {
+                                            let item_name = &rpg_shared_state.characters[0].inventory
+                                                [menu_state.inventory_cursor.choose_index]
+                                                .name.to_owned();
+                                            rpg_shared_state.characters[0].inventory
+                                                .remove(menu_state.inventory_cursor.choose_index);
+                                            shared_state.interrupt_animations.push(vec![
+                                                Animation::create_message(
+                                                    format!("{}を捨てた", item_name),
+                                                ),
+                                            ]);
+                                            menu_state.inventory_confirm_cursor.reset();
+                                            menu_state.inventory_cursor.reset();
+                                            menu_state.inventory_confirm_opened = false;
+                                            menu_elements.inventory_confirm.hide();
+                                            if rpg_shared_state.characters[0].inventory.is_empty() {
+                                                menu_state.inventory_opened = false;
+                                                menu_elements.inventory_container.hide();
+                                                return
+                                            }
+                                            menu_state.show_inventory(
+                                                elements,
+                                                &rpg_shared_state.characters[0].inventory,
+                                            );
+                                            return
+                                        }
+                                        match &rpg_shared_state.characters[0].inventory
+                                            [menu_state.inventory_cursor.choose_index]
+                                            .item_type
+                                        {
+                                            ItemType::Weapon => {
+                                                shared_state.interrupt_animations.push(vec![
+                                                    Animation::create_message(
+                                                        "武器は使用できません".to_string(),
+                                                    ),
+                                                ]);
+                                                return
+                                            }
+                                            _ => {}
+                                        }
                                         let item = Item::new(
                                             &rpg_shared_state.characters[0].inventory
-                                                [menu_state.inventory_choose_index]
+                                                [menu_state.inventory_cursor.choose_index]
                                                 .name,
                                         );
                                         let consume_func = item.consume_func;
                                         consume_func(&item, rpg_shared_state);
                                         rpg_shared_state.characters[0]
                                             .inventory
-                                            .remove(menu_state.inventory_choose_index);
+                                            .remove(menu_state.inventory_cursor.choose_index);
                                         menu_state.inventory_cursor.update_choice_length(
                                             rpg_shared_state.characters[0].inventory.len(),
                                         );
@@ -160,32 +200,29 @@ impl MenuState {
                                             elements,
                                             &rpg_shared_state.characters[0].inventory,
                                         );
-                                        return;
+                                        shared_state.interrupt_animations.push(vec![
+                                            Animation::create_message(
+                                                "薬草を使用しました。HPが30回復".to_string(),
+                                            ),
+                                        ]);
+                                        return
                                     } else {
-                                        match &rpg_shared_state.characters[0].inventory
-                                            [menu_state.inventory_choose_index]
-                                            .item_type
-                                        {
-                                            ItemType::Consumable => {
-                                                menu_state.inventory_confirm_opened = true;
-                                                menu_elements.inventory_confirm.show();
-                                                return;
-                                            }
-                                            ItemType::Weapon => {
-                                                shared_state.references.borrow_mut().has_message =
-                                                    true;
-                                                shared_state.interrupt_animations.push(vec![
-                                                    Animation::create_message(
-                                                        "武器は使用できません".to_string(),
-                                                    ),
-                                                ]);
-                                            }
-                                        }
+                                        menu_state.inventory_confirm_opened = true;
+                                        menu_elements.inventory_confirm.show();
+                                        return;
                                     }
                                 }
                                 match menu_state.cursor.choose_index {
                                     0 => {
                                         let character = rpg_shared_state.characters.get(0).unwrap();
+                                        if character.inventory.is_empty() {
+                                            shared_state.interrupt_animations.push(vec![
+                                                Animation::create_message(
+                                                    "何も持っていない！".to_owned(),
+                                                ),
+                                            ]);
+                                            return;
+                                        }
                                         let inventory = &character.inventory;
                                         menu_state.show_inventory(elements, inventory);
                                     }

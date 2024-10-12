@@ -95,7 +95,6 @@ impl BattleState {
                         "a" => {
                             if battle_state.command_cursor.choose_index != 1 {
                                 shared_state.primitives.requested_scene_index = 0;
-                                //shared_state.references.borrow_mut().has_message = true;
                                 shared_state.interrupt_animations.push(vec![
                                     Animation::create_multi_line_messages(vec![
                                         "もう戦えない！".to_owned(),

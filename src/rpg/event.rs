@@ -30,7 +30,6 @@ impl EventState {
                 RPGEvent(..) => {}
                 _ => panic!(),
             }
-            // shared_state.references.borrow_mut().has_message = true;
             shared_state.primitives.requested_scene_index = 2;
             shared_state.interrupt_animations.push(vec![
                 Animation::create_multi_line_messages(vec![
