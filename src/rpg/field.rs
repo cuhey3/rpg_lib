@@ -67,7 +67,7 @@ impl FieldState {
         &mut self,
         rpg_shared_state: &mut RPGSharedState,
         primitives: &mut Primitives,
-        references: Rc<RefCell<References>>,
+        _: Rc<RefCell<References>>,
         interrupt_animations: &mut Vec<Vec<Animation>>,
         key: String,
     ) {

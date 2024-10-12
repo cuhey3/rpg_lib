@@ -6,7 +6,7 @@ use crate::rpg::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::Animation;
 use crate::svg::element_wrapper::ElementWrapper;
-use crate::svg::{Cursor, CursorType, SharedElements};
+use crate::svg::{Cursor, SharedElements};
 use wasm_bindgen_test::console_log;
 use web_sys::Element;
 
@@ -43,7 +43,8 @@ impl MenuState {
             inventories: vec![inventory1, inventory2],
             inventory_confirm,
         };
-        let mut inventory_confirm_cursor = Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
+        let inventory_confirm_cursor =
+            Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
         let menu_state = MenuState {
             inventory_opened: false,
             inventory_confirm_opened: false,
@@ -107,15 +108,15 @@ impl MenuState {
                             "ArrowUp" | "ArrowDown" => {
                                 if menu_state.inventory_confirm_opened {
                                     menu_state.inventory_confirm_cursor.consume(key);
-                                    return
+                                    return;
                                 }
                                 if !menu_state.inventory_opened {
                                     menu_state.cursor.consume(key);
-                                    return
+                                    return;
                                 }
                                 let inventory_len = rpg_shared_state.characters[0].inventory.len();
                                 if inventory_len < 2 {
-                                    return
+                                    return;
                                 }
                                 menu_state
                                     .inventory_cursor
@@ -137,19 +138,23 @@ impl MenuState {
                             "a" => {
                                 if menu_state.inventory_opened {
                                     if rpg_shared_state.characters[0].inventory.is_empty() {
-                                        return
+                                        return;
                                     }
                                     if menu_state.inventory_confirm_opened {
                                         if menu_state.inventory_confirm_cursor.choose_index == 1 {
-                                            let item_name = &rpg_shared_state.characters[0].inventory
+                                            let item_name = &rpg_shared_state.characters[0]
+                                                .inventory
                                                 [menu_state.inventory_cursor.choose_index]
-                                                .name.to_owned();
-                                            rpg_shared_state.characters[0].inventory
+                                                .name
+                                                .to_owned();
+                                            rpg_shared_state.characters[0]
+                                                .inventory
                                                 .remove(menu_state.inventory_cursor.choose_index);
                                             shared_state.interrupt_animations.push(vec![
-                                                Animation::create_message(
-                                                    format!("{}を捨てた", item_name),
-                                                ),
+                                                Animation::create_message(format!(
+                                                    "{}を捨てた",
+                                                    item_name
+                                                )),
                                             ]);
                                             menu_state.inventory_confirm_cursor.reset();
                                             menu_state.inventory_cursor.reset();
@@ -158,13 +163,13 @@ impl MenuState {
                                             if rpg_shared_state.characters[0].inventory.is_empty() {
                                                 menu_state.inventory_opened = false;
                                                 menu_elements.inventory_container.hide();
-                                                return
+                                                return;
                                             }
                                             menu_state.show_inventory(
                                                 elements,
                                                 &rpg_shared_state.characters[0].inventory,
                                             );
-                                            return
+                                            return;
                                         }
                                         match &rpg_shared_state.characters[0].inventory
                                             [menu_state.inventory_cursor.choose_index]
@@ -176,7 +181,7 @@ impl MenuState {
                                                         "武器は使用できません".to_string(),
                                                     ),
                                                 ]);
-                                                return
+                                                return;
                                             }
                                             _ => {}
                                         }
@@ -205,7 +210,7 @@ impl MenuState {
                                                 "薬草を使用しました。HPが30回復".to_string(),
                                             ),
                                         ]);
-                                        return
+                                        return;
                                     } else {
                                         menu_state.inventory_confirm_opened = true;
                                         menu_elements.inventory_confirm.show();

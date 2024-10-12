@@ -56,27 +56,23 @@ impl Cursor {
             }
             CursorType::Side => {
                 self.element
-                .set_attribute("x", &*self.default_x.to_string())
-                .unwrap();
+                    .set_attribute("x", &*self.default_x.to_string())
+                    .unwrap();
             }
         }
     }
     pub fn consume(&mut self, key: String) {
         let new_index = match self.cursor_type {
-            CursorType::Default => {
-                match key.as_str() {
-                    "ArrowUp" => (self.choose_index + self.choice_length - 1) % self.choice_length,
-                    "ArrowDown" => (self.choose_index + 1) % self.choice_length,
-                    _ => self.choose_index,
-                }
-            }
-            CursorType::Side => {
-                match key.as_str() {
-                    "ArrowLeft" => (self.choose_index + self.choice_length - 1) % self.choice_length,
-                    "ArrowRight" => (self.choose_index + 1) % self.choice_length,
-                    _ => self.choose_index,
-                }
-            }
+            CursorType::Default => match key.as_str() {
+                "ArrowUp" => (self.choose_index + self.choice_length - 1) % self.choice_length,
+                "ArrowDown" => (self.choose_index + 1) % self.choice_length,
+                _ => self.choose_index,
+            },
+            CursorType::Side => match key.as_str() {
+                "ArrowLeft" => (self.choose_index + self.choice_length - 1) % self.choice_length,
+                "ArrowRight" => (self.choose_index + 1) % self.choice_length,
+                _ => self.choose_index,
+            },
         };
         self.choose_index = new_index;
         match self.cursor_type {
