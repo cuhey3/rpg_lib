@@ -1,3 +1,4 @@
+use crate::engine::Input;
 use crate::svg::element_wrapper::ElementWrapper;
 use web_sys::{Document, Element};
 
@@ -61,16 +62,18 @@ impl Cursor {
             }
         }
     }
-    pub fn consume(&mut self, key: String) {
+    pub fn consume(&mut self, input: Input) {
         let new_index = match self.cursor_type {
-            CursorType::Default => match key.as_str() {
-                "ArrowUp" => (self.choose_index + self.choice_length - 1) % self.choice_length,
-                "ArrowDown" => (self.choose_index + 1) % self.choice_length,
+            CursorType::Default => match input {
+                Input::ArrowUp => (self.choose_index + self.choice_length - 1) % self.choice_length,
+                Input::ArrowDown => (self.choose_index + 1) % self.choice_length,
                 _ => self.choose_index,
             },
-            CursorType::Side => match key.as_str() {
-                "ArrowLeft" => (self.choose_index + self.choice_length - 1) % self.choice_length,
-                "ArrowRight" => (self.choose_index + 1) % self.choice_length,
+            CursorType::Side => match input {
+                Input::ArrowLeft => {
+                    (self.choose_index + self.choice_length - 1) % self.choice_length
+                }
+                Input::ArrowRight => (self.choose_index + 1) % self.choice_length,
                 _ => self.choose_index,
             },
         };

@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGEvent;
 use crate::engine::application_types::StateType::RPGShared;
 use crate::engine::scene::Scene;
-use crate::engine::State;
+use crate::engine::{Input, State};
 use crate::svg::animation::Animation;
 use wasm_bindgen_test::console_log;
 
@@ -56,8 +56,8 @@ impl EventState {
         }
         init_func
     }
-    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
-        fn consume_func(_: &mut Scene, _: &mut State, _: String) {}
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
+        fn consume_func(_: &mut Scene, _: &mut State, _: Input) {}
         consume_func
     }
 }

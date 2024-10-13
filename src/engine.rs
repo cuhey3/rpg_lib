@@ -36,6 +36,7 @@ impl Engine {
     }
 
     pub fn keydown(&mut self, key: String) {
+        let input = Input::from(key);
         if self.shared_state.references.borrow_mut().has_message {
             if !self
                 .shared_state
@@ -49,13 +50,13 @@ impl Engine {
             return;
         }
         if self.has_animation_blocking_scene_update() {
-            console_log!("keydown interrupt {:?}", key);
+            console_log!("keydown interrupt {:?}", input);
             return;
         }
         let scene_index = self.shared_state.primitives.scene_index;
         let consume_func = self.scenes[scene_index].consume_func;
         console_log!("consume start scene: {:?}", scene_index);
-        consume_func(&mut self.scenes[scene_index], &mut self.shared_state, key);
+        consume_func(&mut self.scenes[scene_index], &mut self.shared_state, input);
         while !self.shared_state.to_send_channel_messages.is_empty() {
             let message = self.shared_state.to_send_channel_messages.remove(0);
             self.web_socket_wrapper.send_message(message);
@@ -245,7 +246,7 @@ impl Position {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PositionMessage {
     pub user_name: String,
-    pub direction: String,
+    pub direction: Input,
     pub position_x: i32,
     pub position_y: i32,
     pub map_index: usize,
@@ -270,4 +271,30 @@ pub struct State {
     pub interrupt_animations: Vec<Vec<Animation>>,
     pub primitives: Primitives,
     pub references: Rc<RefCell<References>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Input {
+    Enter,
+    Cancel,
+    Context,
+    ArrowRight,
+    ArrowLeft,
+    ArrowUp,
+    ArrowDown,
+    None,
+}
+
+impl Input {
+    pub fn from(key: String) -> Input {
+        match key.as_str() {
+            "a" => Input::Enter,
+            "Escape" => Input::Cancel,
+            "ArrowRight" => Input::ArrowRight,
+            "ArrowLeft" => Input::ArrowLeft,
+            "ArrowUp" => Input::ArrowUp,
+            "ArrowDown" => Input::ArrowDown,
+            _ => Input::None,
+        }
+    }
 }

@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGMenu;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::State;
+use crate::engine::{Input, State};
 use crate::rpg::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::Animation;
@@ -43,8 +43,7 @@ impl MenuState {
             inventories: vec![inventory1, inventory2],
             inventory_confirm,
         };
-        let inventory_confirm_cursor =
-            Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
+        let inventory_confirm_cursor = Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
         let menu_state = MenuState {
             inventory_opened: false,
             inventory_confirm_opened: false,
@@ -93,8 +92,8 @@ impl MenuState {
                 .set_inner_html(target_item.unwrap().description.as_str());
         }
     }
-    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
-        fn consume_func(scene: &mut Scene, shared_state: &mut State, key: String) {
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
+        fn consume_func(scene: &mut Scene, shared_state: &mut State, input: Input) {
             match &mut scene.scene_type {
                 RPGMenu(menu_state) => {
                     let ref menu_elements = menu_state.elements;
@@ -104,14 +103,14 @@ impl MenuState {
                         ..
                     } = shared_state
                     {
-                        match key.as_str() {
-                            "ArrowUp" | "ArrowDown" => {
+                        match input {
+                            Input::ArrowUp | Input::ArrowDown => {
                                 if menu_state.inventory_confirm_opened {
-                                    menu_state.inventory_confirm_cursor.consume(key);
+                                    menu_state.inventory_confirm_cursor.consume(input);
                                     return;
                                 }
                                 if !menu_state.inventory_opened {
-                                    menu_state.cursor.consume(key);
+                                    menu_state.cursor.consume(input);
                                     return;
                                 }
                                 let inventory_len = rpg_shared_state.characters[0].inventory.len();
@@ -121,7 +120,7 @@ impl MenuState {
                                 menu_state
                                     .inventory_cursor
                                     .update_choice_length(inventory_len);
-                                menu_state.inventory_cursor.consume(key);
+                                menu_state.inventory_cursor.consume(input);
                                 shared_state.elements.message.show();
                                 let target_item = rpg_shared_state.characters[0]
                                     .inventory
@@ -135,7 +134,7 @@ impl MenuState {
                                         .set_inner_html(target_item.unwrap().description.as_str());
                                 }
                             }
-                            "a" => {
+                            Input::Enter => {
                                 if menu_state.inventory_opened {
                                     if rpg_shared_state.characters[0].inventory.is_empty() {
                                         return;
@@ -276,7 +275,7 @@ impl MenuState {
                                 }
                             }
 
-                            "Escape" => {
+                            Input::Cancel => {
                                 if menu_state.inventory_confirm_opened {
                                     menu_state.inventory_confirm_opened = false;
                                     menu_elements.inventory_confirm.hide();

@@ -1,10 +1,10 @@
 use crate::engine::application_types::SceneType;
-use crate::engine::State;
+use crate::engine::{Input, State};
 
 pub struct Scene {
     pub element_id: String,
     pub scene_type: SceneType,
-    pub consume_func: fn(scene: &mut Scene, shared_state: &mut State, str: String),
+    pub consume_func: fn(scene: &mut Scene, shared_state: &mut State, input: Input),
     pub init_func: fn(scene: &mut Scene, shared_state: &mut State),
 }
 

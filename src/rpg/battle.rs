@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGBattle;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::State;
+use crate::engine::{Input, State};
 use crate::svg::animation::{Animation, AnimationSpan};
 use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::Cursor;
@@ -83,16 +83,16 @@ impl BattleState {
         }
         init_func
     }
-    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
-        fn consume_func(scene: &mut Scene, shared_state: &mut State, key: String) {
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
+        fn consume_func(scene: &mut Scene, shared_state: &mut State, input: Input) {
             match &mut scene.scene_type {
                 RPGBattle(battle_state) => {
-                    console_log!("battle consume key: {:?}", key);
-                    match key.as_str() {
-                        "ArrowUp" | "ArrowDown" => {
-                            battle_state.command_cursor.consume(key);
+                    console_log!("battle consume key: {:?}", input);
+                    match input {
+                        Input::ArrowUp | Input::ArrowDown => {
+                            battle_state.command_cursor.consume(input);
                         }
-                        "a" => {
+                        Input::Enter => {
                             if battle_state.command_cursor.choose_index != 1 {
                                 shared_state.primitives.requested_scene_index = 0;
                                 shared_state.interrupt_animations.push(vec![

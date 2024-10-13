@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGTitle;
 use crate::engine::application_types::StateType::RPGShared;
 use crate::engine::scene::Scene;
-use crate::engine::State;
+use crate::engine::{Input, State};
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::Animation;
 use crate::svg::Cursor;
@@ -36,14 +36,14 @@ impl TitleState {
         }
         init_func
     }
-    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
-        fn consume_func(scene: &mut Scene, shared_state: &mut State, key: String) {
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
+        fn consume_func(scene: &mut Scene, shared_state: &mut State, input: Input) {
             match &mut scene.scene_type {
-                RPGTitle(title_state) => match key.as_str() {
-                    "ArrowUp" | "ArrowDown" => {
-                        title_state.cursor.consume(key);
+                RPGTitle(title_state) => match input {
+                    Input::ArrowUp | Input::ArrowDown => {
+                        title_state.cursor.consume(input);
                     }
-                    "a" => {
+                    Input::Enter => {
                         if title_state.cursor.choose_index == 2 {
                             return;
                         }

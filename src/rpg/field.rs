@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{PositionMessage, Primitives, References, State};
+use crate::engine::{Input, PositionMessage, Primitives, References, State};
 use crate::rpg::field::EventType::*;
 use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
@@ -69,7 +69,7 @@ impl FieldState {
         primitives: &mut Primitives,
         _: Rc<RefCell<References>>,
         interrupt_animations: &mut Vec<Vec<Animation>>,
-        key: String,
+        input: Input,
     ) {
         let map = &mut self.maps[primitives.map_index];
         // let start_x: i32 = characters[0].position.x;
@@ -78,21 +78,21 @@ impl FieldState {
         let mut y: i32 = rpg_shared_state.characters[0].position.y.to_owned();
         let original_translate_x = self.wrapper_translate_x.to_owned();
         let original_translate_y = self.wrapper_translate_y.to_owned();
-        match key.as_str() {
-            "ArrowUp" => {
+        match input {
+            Input::ArrowUp => {
                 y -= 40;
                 self.wrapper_translate_y += 40;
             }
-            "ArrowDown" => {
+            Input::ArrowDown => {
                 y += 40;
                 self.wrapper_translate_y -= 40;
             }
-            "ArrowRight" => {
+            Input::ArrowRight => {
                 x += 40;
                 self.wrapper_translate_x -= 40;
             }
 
-            "ArrowLeft" => {
+            Input::ArrowLeft => {
                 x -= 40;
                 self.wrapper_translate_x += 40;
             }
@@ -103,8 +103,8 @@ impl FieldState {
             .iter()
             .find(|(position, _)| position.x == x && position.y == y);
         if found_event.is_none() {
-            match key.as_str() {
-                "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
+            match input {
+                Input::ArrowUp | Input::ArrowDown | Input::ArrowRight | Input::ArrowLeft => {
                     rpg_shared_state.characters[0].position = Position::new(x, y);
                     self.update_character_position(x, y);
                     // self.character_position = Position::new(x, y);
@@ -228,8 +228,8 @@ impl FieldState {
         }
         init_func
     }
-    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, String) {
-        fn consume_func(scene: &mut Scene, shared_state: &mut State, key: String) {
+    pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
+        fn consume_func(scene: &mut Scene, shared_state: &mut State, input: Input) {
             if let State {
                 state_type: StateType::RPGShared(rpg_shared_state),
                 primitives,
@@ -241,11 +241,11 @@ impl FieldState {
             {
                 match &mut scene.scene_type {
                     RPGField(field_state) => {
-                        let direction_string = match key.as_str() {
-                            "ArrowUp" => "↑",
-                            "ArrowDown" => "↓",
-                            "ArrowRight" => "→",
-                            "ArrowLeft" => "←",
+                        let direction_string = match input {
+                            Input::ArrowUp => "↑",
+                            Input::ArrowDown => "↓",
+                            Input::ArrowRight => "→",
+                            Input::ArrowLeft => "←",
                             _ => "",
                         };
                         if direction_string != "" {
@@ -253,18 +253,21 @@ impl FieldState {
                                 .character_direction_element
                                 .set_inner_html(direction_string);
                         }
-                        match key.as_str() {
-                            "ArrowUp" | "ArrowDown" | "ArrowRight" | "ArrowLeft" => {
+                        match input {
+                            Input::ArrowUp
+                            | Input::ArrowDown
+                            | Input::ArrowRight
+                            | Input::ArrowLeft => {
                                 field_state.move_to(
                                     rpg_shared_state,
                                     primitives,
                                     references.clone(),
                                     interrupt_animations,
-                                    key.to_owned(),
+                                    input.clone(),
                                 );
                                 let message = PositionMessage {
                                     user_name: shared_state.user_name.to_owned(),
-                                    direction: key.to_owned(),
+                                    direction: input.clone(),
                                     position_x: rpg_shared_state.characters[0].position.x,
                                     position_y: rpg_shared_state.characters[0].position.y,
                                     map_index: primitives.requested_map_index,
@@ -272,7 +275,7 @@ impl FieldState {
                                 to_send_channel_messages
                                     .push(serde_json::to_string(&message).unwrap());
                             }
-                            "Escape" => {
+                            Input::Cancel => {
                                 primitives.requested_scene_index += 2;
                             }
                             _ => (),
@@ -714,11 +717,11 @@ impl Map {
             text.set_attribute("font-size", "35").unwrap();
             text.set_attribute("fill", "black").unwrap();
             text.class_list().add_2("direction", "online-user").unwrap();
-            text.set_inner_html(match user.direction.as_str() {
-                "ArrowRight" => "→",
-                "ArrowLeft" => "←",
-                "ArrowUp" => "↑",
-                "ArrowDown" => "↓",
+            text.set_inner_html(match user.direction {
+                Input::ArrowRight => "→",
+                Input::ArrowLeft => "←",
+                Input::ArrowUp => "↑",
+                Input::ArrowDown => "↓",
                 _ => "",
             });
             wrapper_element.append_child(&*text).unwrap();
