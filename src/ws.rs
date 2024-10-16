@@ -80,16 +80,13 @@ impl WebSocketWrapper {
             .set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
         onopen_callback.forget();
 
-        let clone = self.clone();
         let clone_messages = self.messages.clone();
         let onmessage_callback = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
             if let Ok(raw_text) = e.data().dyn_into::<js_sys::JsString>() {
                 let raw_text = raw_text.as_string().unwrap();
                 let received_message: ChannelMessage = serde_json::from_str(&raw_text).unwrap();
-                if received_message.user_name != clone.user_name {
-                    let mut clone_messages = clone_messages.borrow_mut();
-                    (*clone_messages).push(received_message);
-                }
+                let mut clone_messages = clone_messages.borrow_mut();
+                (*clone_messages).push(received_message);
             }
         });
         self.ws

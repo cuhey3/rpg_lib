@@ -1,56 +1,48 @@
 use crate::engine::application_types::SceneType::RPGMenu;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{Input, State};
+use crate::engine::{
+    ChoiceInstance, ChoiceSetting, ChoiceToken, EmoteMessage, Input, State, SvgRenderer,
+};
 use crate::rpg::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
-use crate::svg::animation::Animation;
-use crate::svg::element_wrapper::ElementWrapper;
-use crate::svg::{Cursor, SharedElements};
+use crate::svg::animation::{Animation, AnimationSpan};
+use crate::svg::CursorType;
+use crate::Position;
 use wasm_bindgen_test::console_log;
-use web_sys::Element;
-
-struct MenuElements {
-    inventory_container: ElementWrapper,
-    inventories: Vec<Element>,
-    inventory_confirm: ElementWrapper,
-}
 
 pub struct MenuState {
-    inventory_opened: bool,
-    inventory_confirm_opened: bool,
-    elements: MenuElements,
-    cursor: Cursor,
-    inventory_cursor: Cursor,
-    inventory_confirm_cursor: Cursor,
+    choice_instance: ChoiceInstance,
+    menu_renderer: SvgRenderer,
+    inventory_renderer: SvgRenderer,
+    inventory_confirm_renderer: SvgRenderer,
+    common_confirm_renderer: SvgRenderer,
+    emote_renderer: SvgRenderer,
+    emotes: Vec<String>,
 }
 
 impl MenuState {
-    pub fn create_menu_scene(shared_state: &mut State) -> Scene {
-        let ref document = shared_state.elements.document;
-        let inventory_container =
-            ElementWrapper::new(document.query_selector("#inventory").unwrap().unwrap());
-        let inventory1 = document.query_selector("#inventory-1").unwrap().unwrap();
-        let inventory2 = document.query_selector("#inventory-2").unwrap().unwrap();
-        let inventory_confirm = ElementWrapper::new(
-            document
-                .query_selector("#inventory-confirm")
-                .unwrap()
-                .unwrap(),
-        );
-        let elements = MenuElements {
-            inventory_container,
-            inventories: vec![inventory1, inventory2],
-            inventory_confirm,
-        };
-        let inventory_confirm_cursor = Cursor::new(document, "inventory-confirm-cursor", 2, 50.0);
+    pub fn create_menu_scene(_: &mut State) -> Scene {
+        let choice_setting = ChoiceSetting::get_menu_setting();
+        let choice_instance = choice_setting.get_menu_instance();
+        let mut emotes = "👉👆👈👇👍🤨😆🤩🥺"
+            .chars()
+            .into_iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<String>>();
+        emotes.push("☺️".to_string());
+
         let menu_state = MenuState {
-            inventory_opened: false,
-            inventory_confirm_opened: false,
-            elements,
-            cursor: Cursor::new(document, "menu-cursor", 5, 45.0),
-            inventory_cursor: Cursor::new(document, "inventory-cursor", 1, 45.0),
-            inventory_confirm_cursor,
+            choice_instance,
+            menu_renderer: SvgRenderer::new("menu".to_string(), 45.0),
+            inventory_renderer: SvgRenderer::new("menu-inventory".to_string(), 45.0),
+            inventory_confirm_renderer: SvgRenderer::new(
+                "menu-inventory-confirm".to_string(),
+                50.0,
+            ),
+            common_confirm_renderer: SvgRenderer::new("menu-common-confirm".to_string(), 50.0),
+            emote_renderer: SvgRenderer::new("menu-emote".to_string(), 45.0),
+            emotes,
         };
         let consume_func = menu_state.create_consume_func();
         let init_func = menu_state.create_init_func();
@@ -64,173 +56,305 @@ impl MenuState {
     }
 
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
-        fn init_func(_: &mut Scene, shared_state: &mut State) {
+        fn init_func(scene: &mut Scene, shared_state: &mut State) {
             shared_state.elements.menu_scene.show();
+            if let Scene {
+                scene_type: RPGMenu(menu_state),
+                ..
+            } = scene
+            {
+                menu_state.choice_instance = ChoiceSetting::get_menu_setting().get_menu_instance();
+                let labels = menu_state.choice_instance.now_choice.get_branch_labels();
+                menu_state.menu_renderer.load();
+                menu_state
+                    .menu_renderer
+                    .cursor
+                    .update_choice_length(labels.len());
+                menu_state.menu_renderer.render(labels, "");
+            }
             console_log!("init end");
         }
         init_func
     }
 
-    pub fn show_inventory(&mut self, elements: &mut SharedElements, items: &Vec<Item>) {
-        self.elements
-            .inventories
-            .iter()
-            .for_each(|element| element.set_inner_html(""));
-        for index in 0..items.len() {
-            self.elements.inventories[index]
-                .set_inner_html(items.get(index).unwrap().name.as_str());
-        }
-        self.elements.inventory_container.show();
-        self.inventory_opened = true;
-        let target_item = items.get(self.inventory_cursor.choose_index);
-        if target_item.is_some() {
-            elements.message.show();
-            elements
-                .document
-                .get_element_by_id("message-1")
-                .unwrap()
-                .set_inner_html(target_item.unwrap().description.as_str());
-        }
-    }
     pub fn create_consume_func(&self) -> fn(&mut Scene, &mut State, Input) {
         fn consume_func(scene: &mut Scene, shared_state: &mut State, input: Input) {
-            match &mut scene.scene_type {
-                RPGMenu(menu_state) => {
-                    let ref menu_elements = menu_state.elements;
+            if let RPGMenu(menu_state) = &mut scene.scene_type {
+                {
                     if let State {
                         state_type: StateType::RPGShared(rpg_shared_state),
-                        elements,
+                        to_send_channel_messages,
                         ..
                     } = shared_state
                     {
                         match input {
-                            Input::ArrowUp | Input::ArrowDown => {
-                                if menu_state.inventory_confirm_opened {
-                                    menu_state.inventory_confirm_cursor.consume(input);
-                                    return;
+                            // 矢印キーは状態に応じてカーソルを動かすのみ
+                            Input::ArrowUp
+                            | Input::ArrowDown
+                            | Input::ArrowRight
+                            | Input::ArrowLeft => {
+                                match menu_state.choice_instance.get_now() {
+                                    ChoiceToken::Menu => {
+                                        menu_state.menu_renderer.cursor.consume(input)
+                                    }
+                                    ChoiceToken::ItemInventory => {
+                                        menu_state.inventory_renderer.cursor.consume(input)
+                                    }
+                                    ChoiceToken::ItemOperation => {
+                                        menu_state.inventory_confirm_renderer.cursor.consume(input)
+                                    }
+                                    ChoiceToken::Confirm => {
+                                        menu_state.common_confirm_renderer.cursor.consume(input)
+                                    }
+                                    ChoiceToken::Emote => {
+                                        menu_state.emote_renderer.cursor.consume(input)
+                                    }
+                                    _ => {}
                                 }
-                                if !menu_state.inventory_opened {
-                                    menu_state.cursor.consume(input);
-                                    return;
-                                }
-                                let inventory_len = rpg_shared_state.characters[0].inventory.len();
-                                if inventory_len < 2 {
-                                    return;
-                                }
-                                menu_state
-                                    .inventory_cursor
-                                    .update_choice_length(inventory_len);
-                                menu_state.inventory_cursor.consume(input);
-                                shared_state.elements.message.show();
-                                let target_item = rpg_shared_state.characters[0]
-                                    .inventory
-                                    .get(menu_state.inventory_cursor.choose_index);
-                                if target_item.is_some() {
-                                    shared_state
-                                        .elements
-                                        .document
-                                        .get_element_by_id("message-1")
-                                        .unwrap()
-                                        .set_inner_html(target_item.unwrap().description.as_str());
-                                }
+                                return;
                             }
                             Input::Enter => {
-                                if menu_state.inventory_opened {
-                                    if rpg_shared_state.characters[0].inventory.is_empty() {
-                                        return;
+                                // 決定キーが押された場合、まず choice_instance の状態を先に進める
+                                match menu_state.choice_instance.get_now() {
+                                    ChoiceToken::Menu => {
+                                        menu_state
+                                            .choice_instance
+                                            .choose(menu_state.menu_renderer.cursor.choose_index);
                                     }
-                                    if menu_state.inventory_confirm_opened {
-                                        if menu_state.inventory_confirm_cursor.choose_index == 1 {
-                                            let item_name = &rpg_shared_state.characters[0]
-                                                .inventory
-                                                [menu_state.inventory_cursor.choose_index]
-                                                .name
-                                                .to_owned();
-                                            rpg_shared_state.characters[0]
-                                                .inventory
-                                                .remove(menu_state.inventory_cursor.choose_index);
-                                            shared_state.interrupt_animations.push(vec![
-                                                Animation::create_message(format!(
-                                                    "{}を捨てた",
-                                                    item_name
-                                                )),
-                                            ]);
-                                            menu_state.inventory_confirm_cursor.reset();
-                                            menu_state.inventory_cursor.reset();
-                                            menu_state.inventory_confirm_opened = false;
-                                            menu_elements.inventory_confirm.hide();
-                                            if rpg_shared_state.characters[0].inventory.is_empty() {
-                                                menu_state.inventory_opened = false;
-                                                menu_elements.inventory_container.hide();
-                                                return;
-                                            }
-                                            menu_state.show_inventory(
-                                                elements,
-                                                &rpg_shared_state.characters[0].inventory,
-                                            );
-                                            return;
-                                        }
-                                        match &rpg_shared_state.characters[0].inventory
-                                            [menu_state.inventory_cursor.choose_index]
-                                            .item_type
-                                        {
-                                            ItemType::Weapon => {
-                                                shared_state.interrupt_animations.push(vec![
-                                                    Animation::create_message(
-                                                        "武器は使用できません".to_string(),
-                                                    ),
-                                                ]);
-                                                return;
-                                            }
-                                            _ => {}
-                                        }
-                                        let item = Item::new(
-                                            &rpg_shared_state.characters[0].inventory
-                                                [menu_state.inventory_cursor.choose_index]
-                                                .name,
+                                    ChoiceToken::ItemInventory => {
+                                        menu_state.choice_instance.choose(
+                                            menu_state.inventory_renderer.cursor.choose_index,
                                         );
-                                        let consume_func = item.consume_func;
-                                        consume_func(&item, rpg_shared_state);
-                                        rpg_shared_state.characters[0]
-                                            .inventory
-                                            .remove(menu_state.inventory_cursor.choose_index);
-                                        menu_state.inventory_cursor.update_choice_length(
-                                            rpg_shared_state.characters[0].inventory.len(),
+                                        menu_state.choice_instance.choose(
+                                            menu_state.inventory_renderer.cursor.choose_index,
                                         );
-                                        menu_state.inventory_cursor.reset();
-                                        menu_state.inventory_confirm_opened = false;
-                                        menu_elements.inventory_confirm.hide();
-                                        menu_state.show_inventory(
-                                            elements,
-                                            &rpg_shared_state.characters[0].inventory,
+                                    }
+                                    ChoiceToken::ItemOperation => {
+                                        menu_state.choice_instance.choose(
+                                            menu_state
+                                                .inventory_confirm_renderer
+                                                .cursor
+                                                .choose_index,
                                         );
-                                        shared_state.interrupt_animations.push(vec![
-                                            Animation::create_message(
-                                                "薬草を使用しました。HPが30回復".to_string(),
-                                            ),
-                                        ]);
-                                        return;
-                                    } else {
-                                        menu_state.inventory_confirm_opened = true;
-                                        menu_elements.inventory_confirm.show();
-                                        return;
+                                    }
+                                    ChoiceToken::Emote => {
+                                        menu_state
+                                            .choice_instance
+                                            .choose(menu_state.emote_renderer.cursor.choose_index);
+                                        menu_state
+                                            .choice_instance
+                                            .choose(menu_state.emote_renderer.cursor.choose_index);
+                                    }
+                                    ChoiceToken::Confirm => {
+                                        menu_state.choice_instance.choose(
+                                            menu_state.common_confirm_renderer.cursor.choose_index,
+                                        );
+                                    }
+                                    _ => {
+                                        // TODO
+                                        // 何もしなくていいのか？
                                     }
                                 }
-                                match menu_state.cursor.choose_index {
-                                    0 => {
-                                        let character = rpg_shared_state.characters.get(0).unwrap();
-                                        if character.inventory.is_empty() {
+                                // 先に進めた choice_instance の状態に応じて、画面を更新
+                                // 後続処理がないなら return
+                                match menu_state.choice_instance.get_now() {
+                                    ChoiceToken::Close => {
+                                        menu_state.menu_renderer.hide();
+                                        menu_state.menu_renderer.cursor.reset();
+                                        shared_state.primitives.requested_scene_index -= 2;
+                                        return;
+                                    }
+                                    ChoiceToken::Emote => {
+                                        menu_state.emote_renderer.load();
+                                        menu_state
+                                            .emote_renderer
+                                            .cursor
+                                            .update_choice_length(menu_state.emotes.len());
+                                        menu_state.emote_renderer.cursor.set_box_length(5, 2);
+                                        menu_state
+                                            .emote_renderer
+                                            .cursor
+                                            .set_cursor_type(CursorType::Box);
+                                        menu_state
+                                            .emote_renderer
+                                            .render(menu_state.emotes.clone(), "");
+                                        return;
+                                    }
+                                    // インベントリを開いて完了
+                                    ChoiceToken::ItemInventory => {
+                                        menu_state.inventory_renderer.load();
+
+                                        // 何もアイテム持っていない時は続行させない
+                                        if rpg_shared_state.characters[0].inventory.is_empty() {
+                                            menu_state.choice_instance.undo();
                                             shared_state.interrupt_animations.push(vec![
                                                 Animation::create_message(
-                                                    "何も持っていない！".to_owned(),
+                                                    "何も持っていない！".to_string(),
                                                 ),
                                             ]);
-                                            return;
+                                        } else {
+                                            let item_names = rpg_shared_state.characters[0]
+                                                .inventory
+                                                .iter()
+                                                .map(|i| i.name.clone())
+                                                .collect::<Vec<String>>();
+                                            menu_state
+                                                .inventory_renderer
+                                                .cursor
+                                                .update_choice_length(item_names.len());
+                                            menu_state.inventory_renderer.render(item_names, "");
                                         }
-                                        let inventory = &character.inventory;
-                                        menu_state.show_inventory(elements, inventory);
+                                        return;
                                     }
-                                    2 => {
+                                    ChoiceToken::ItemOperation => {
+                                        menu_state.inventory_confirm_renderer.load();
+                                        let labels = menu_state
+                                            .choice_instance
+                                            .now_choice
+                                            .get_branch_labels();
+                                        menu_state
+                                            .inventory_confirm_renderer
+                                            .cursor
+                                            .update_choice_length(labels.len());
+                                        menu_state.inventory_confirm_renderer.render(labels, "");
+                                    }
+                                    ChoiceToken::Equip | ChoiceToken::Chat => {
+                                        menu_state.choice_instance.undo();
+                                    }
+                                    ChoiceToken::UseItem => {
+                                        for token in
+                                            menu_state.choice_instance.choice_tokens.clone().iter()
+                                        {
+                                            if let ChoiceToken::NthChoose(_, index) = token {
+                                                let index = index.unwrap();
+                                                match &rpg_shared_state.characters[0].inventory
+                                                    [index]
+                                                    .item_type
+                                                {
+                                                    ItemType::Weapon => {
+                                                        shared_state.interrupt_animations.push(
+                                                            vec![Animation::create_message(
+                                                                "武器は使用できません".to_string(),
+                                                            )],
+                                                        );
+                                                        menu_state.choice_instance.undo();
+                                                        return;
+                                                    }
+                                                    _ => {}
+                                                }
+                                                let item = Item::new(
+                                                    &rpg_shared_state.characters[0].inventory
+                                                        [index]
+                                                        .name,
+                                                );
+                                                let consume_func = item.consume_func;
+                                                consume_func(&item, rpg_shared_state);
+                                                shared_state.interrupt_animations.push(vec![
+                                                    Animation::create_message(
+                                                        "薬草を使用しました。HPが30回復"
+                                                            .to_string(),
+                                                    ),
+                                                ]);
+                                                rpg_shared_state.characters[0]
+                                                    .inventory
+                                                    .remove(index);
+                                                menu_state.choice_instance.undo();
+                                            }
+                                        }
+                                        menu_state.inventory_confirm_renderer.hide();
+                                        menu_state.inventory_confirm_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.load();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        // 何もアイテム持っていない時は続行させない
+                                        if rpg_shared_state.characters[0].inventory.is_empty() {
+                                            menu_state.inventory_renderer.hide();
+                                            menu_state.choice_instance.undo();
+                                        } else {
+                                            let item_names = rpg_shared_state.characters[0]
+                                                .inventory
+                                                .iter()
+                                                .map(|i| i.name.clone())
+                                                .collect::<Vec<String>>();
+                                            menu_state
+                                                .inventory_renderer
+                                                .cursor
+                                                .update_choice_length(item_names.len());
+                                            menu_state.inventory_renderer.render(item_names, "");
+                                        }
+                                        return;
+                                    }
+                                    ChoiceToken::SendEmote => {
+                                        for token in menu_state.choice_instance.choice_tokens.iter()
+                                        {
+                                            if let ChoiceToken::NthChoose(_, index) = token {
+                                                let index = index.unwrap();
+                                                let emote = menu_state.emotes[index].clone();
+                                                let Position { x, y } =
+                                                    rpg_shared_state.characters[0].position;
+
+                                                let message = EmoteMessage {
+                                                    user_name: shared_state.user_name.to_owned(),
+                                                    position_x: x,
+                                                    position_y: y,
+                                                    map_index: shared_state.primitives.map_index,
+                                                    emote,
+                                                };
+                                                to_send_channel_messages
+                                                    .push(serde_json::to_string(&message).unwrap());
+                                            }
+                                        }
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        return;
+                                    }
+                                    ChoiceToken::Save
+                                    | ChoiceToken::Title
+                                    | ChoiceToken::DropItem => {
+                                        // Confirm 要素を準備
+                                        let description = menu_state
+                                            .choice_instance
+                                            .now_choice
+                                            .branch_description
+                                            .clone()
+                                            .unwrap();
+                                        menu_state.choice_instance.choose(0);
+                                        menu_state.common_confirm_renderer.load();
+                                        let labels = menu_state
+                                            .choice_instance
+                                            .now_choice
+                                            .get_branch_labels();
+                                        menu_state
+                                            .common_confirm_renderer
+                                            .cursor
+                                            .update_choice_length(labels.len());
+                                        menu_state
+                                            .common_confirm_renderer
+                                            .render(labels, description.as_str());
+                                        return;
+                                    }
+                                    // choice_instance 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
+                                    ChoiceToken::Undo => {
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.common_confirm_renderer.hide();
+                                        menu_state.common_confirm_renderer.cursor.reset();
+                                        return;
+                                    }
+                                    // choice_instance 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
+                                    ChoiceToken::Decide => {
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.common_confirm_renderer.hide();
+                                        menu_state.common_confirm_renderer.cursor.reset();
+                                    }
+                                    _ => {}
+                                }
+                                // Confirm を必要とした要素についてはここでさらに後続処理
+                                match menu_state.choice_instance.get_now() {
+                                    ChoiceToken::Save => {
                                         let character = &rpg_shared_state.characters[0];
                                         console_log!(
                                             "character_u32, {},{}",
@@ -263,37 +387,112 @@ impl MenuState {
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message("セーブしました".to_string()),
                                         ]);
+                                        menu_state.choice_instance.undo();
+                                        return;
                                     }
-                                    3 => {
+                                    ChoiceToken::Title => {
+                                        menu_state.menu_renderer.hide();
+                                        menu_state.menu_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.hide();
+                                        menu_state.inventory_renderer.cursor.reset();
+                                        menu_state.common_confirm_renderer.hide();
+                                        menu_state.common_confirm_renderer.cursor.reset();
                                         shared_state.primitives.requested_scene_index = 0;
-                                        shared_state
-                                            .interrupt_animations
-                                            .push(vec![Animation::create_fade_out_in()]);
+                                        shared_state.interrupt_animations.push(vec![
+                                            Animation::create_fade_out_in_with_span(
+                                                AnimationSpan::FadeOutInMedium,
+                                            ),
+                                        ]);
+                                        return;
                                     }
-                                    4 => shared_state.primitives.requested_scene_index -= 2,
+                                    ChoiceToken::DropItem => {
+                                        for token in menu_state.choice_instance.choice_tokens.iter()
+                                        {
+                                            if let ChoiceToken::NthChoose(_, index) = token {
+                                                let index = index.unwrap();
+                                                let item_name = &rpg_shared_state.characters[0]
+                                                    .inventory[index]
+                                                    .name
+                                                    .to_owned();
+                                                rpg_shared_state.characters[0]
+                                                    .inventory
+                                                    .remove(index);
+                                                shared_state.interrupt_animations.push(vec![
+                                                    Animation::create_message(format!(
+                                                        "{}を捨てた",
+                                                        item_name
+                                                    )),
+                                                ]);
+                                            }
+                                        }
+                                        menu_state.inventory_confirm_renderer.hide();
+                                        menu_state.inventory_confirm_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.load();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        menu_state.choice_instance.undo();
+                                        // 何もアイテム持っていない時は続行させない
+                                        if rpg_shared_state.characters[0].inventory.is_empty() {
+                                            menu_state.inventory_renderer.hide();
+                                            menu_state.choice_instance.undo();
+                                        } else {
+                                            let item_names = rpg_shared_state.characters[0]
+                                                .inventory
+                                                .iter()
+                                                .map(|i| i.name.clone())
+                                                .collect::<Vec<String>>();
+                                            menu_state
+                                                .inventory_renderer
+                                                .cursor
+                                                .update_choice_length(item_names.len());
+                                            menu_state.inventory_renderer.render(item_names, "");
+                                        }
+                                    }
                                     _ => {}
                                 }
                             }
 
                             Input::Cancel => {
-                                if menu_state.inventory_confirm_opened {
-                                    menu_state.inventory_confirm_opened = false;
-                                    menu_elements.inventory_confirm.hide();
-                                    return;
+                                match menu_state.choice_instance.get_now() {
+                                    ChoiceToken::Menu => {
+                                        menu_state.menu_renderer.hide();
+                                        menu_state.menu_renderer.cursor.reset();
+                                        menu_state.inventory_renderer.hide();
+                                        menu_state.inventory_renderer.cursor.reset();
+                                        menu_state.emote_renderer.hide();
+                                        menu_state.emote_renderer.cursor.reset();
+                                        menu_state.common_confirm_renderer.hide();
+                                        menu_state.common_confirm_renderer.cursor.reset();
+                                        shared_state.primitives.requested_scene_index -= 2;
+                                        return;
+                                    }
+                                    ChoiceToken::ItemInventory => {
+                                        menu_state.inventory_renderer.hide();
+                                        menu_state.inventory_renderer.cursor.reset();
+                                    }
+                                    ChoiceToken::ItemOperation => {
+                                        menu_state.inventory_confirm_renderer.hide();
+                                        menu_state.inventory_confirm_renderer.cursor.reset();
+                                        menu_state.choice_instance.undo();
+                                    }
+                                    ChoiceToken::Confirm => {
+                                        menu_state.common_confirm_renderer.cursor.reset();
+                                        menu_state.common_confirm_renderer.hide();
+                                        menu_state.choice_instance.undo();
+                                    }
+                                    ChoiceToken::Emote => {
+                                        menu_state.emote_renderer.hide();
+                                        menu_state.emote_renderer.cursor.reset();
+                                    }
+                                    _ => {}
                                 }
-                                if menu_state.inventory_opened {
-                                    menu_elements.inventory_container.hide();
-                                    menu_state.inventory_opened = false;
-                                    shared_state.elements.message.hide();
-                                    return;
-                                }
-                                shared_state.primitives.requested_scene_index -= 2;
+                                menu_state.choice_instance.undo();
                             }
                             _ => (),
                         }
                     }
                 }
-                _ => panic!(),
             }
         }
         consume_func

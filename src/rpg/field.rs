@@ -1,7 +1,7 @@
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{Input, PositionMessage, Primitives, References, State};
+use crate::engine::{EmoteMessage, Input, PositionMessage, Primitives, References, State};
 use crate::rpg::field::EventType::*;
 use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
@@ -304,7 +304,15 @@ impl FieldState {
             );
         }
     }
-
+    pub fn consume_emote_message(&mut self, message: EmoteMessage, shared_state: &mut State) {
+        if shared_state.primitives.map_index != message.map_index {
+            return;
+        }
+        let own_emote = shared_state.user_name == message.user_name;
+        shared_state
+            .interrupt_animations
+            .push(vec![Animation::show_emote(message, own_emote)]);
+    }
     pub fn consume_channel_message(&mut self, message: &ChannelMessage, shared_state: &mut State) {
         if let State {
             state_type: StateType::RPGShared(rpg_shared_state),
@@ -705,7 +713,12 @@ impl Map {
             rect.set_attribute("fill", "white").unwrap();
             rect.set_attribute("width", "40").unwrap();
             rect.set_attribute("height", "40").unwrap();
-            rect.class_list().add_1("online-user").unwrap();
+            rect.class_list()
+                .add_2(
+                    "online-user",
+                    format!("user-name-{}", user.user_name).as_str(),
+                )
+                .unwrap();
             wrapper_element.append_child(&*rect).unwrap();
             let text = document
                 .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "text")

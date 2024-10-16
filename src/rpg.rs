@@ -1,5 +1,6 @@
 use crate::engine::application_types::StateType;
 use crate::engine::{Engine, Primitives, References, State};
+use crate::svg::animation::Animation;
 use crate::svg::SharedElements;
 use crate::ws::WebSocketWrapper;
 use crate::Position;
@@ -140,7 +141,7 @@ pub fn mount() -> Engine {
         user_name: user_name.to_owned(),
         to_send_channel_messages: vec![],
         elements: SharedElements::new(),
-        interrupt_animations: vec![],
+        interrupt_animations: vec![vec![Animation::always_blink()]],
         state_type: StateType::RPGShared(rpg_shared_state),
         primitives: Primitives {
             scene_index: 0,

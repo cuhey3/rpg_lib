@@ -1,7 +1,7 @@
 use web_sys::Element;
 
 pub struct ElementWrapper {
-    element: Element,
+    pub element: Element,
 }
 
 impl ElementWrapper {
