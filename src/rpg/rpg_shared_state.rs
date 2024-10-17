@@ -1,7 +1,6 @@
 use crate::engine::application_types::StateType;
 use crate::engine::{PositionMessage, State};
 use crate::rpg::{Character, SaveData};
-use wasm_bindgen_test::console_log;
 
 pub struct RPGSharedState {
     pub treasure_box_opened: Vec<Vec<usize>>,
@@ -39,18 +38,8 @@ impl RPGSharedState {
             let mut new_save_data = SaveData::empty();
             new_save_data.load(&mut rpg_shared_state.characters, false);
             rpg_shared_state.treasure_box_opened = new_save_data.treasure_box_usize.to_vec();
-            console_log!(
-                "new_game map1 {} {}",
-                shared_state.primitives.map_index,
-                new_save_data.map_usize.get(0).unwrap()
-            );
             shared_state.primitives.map_index = *new_save_data.map_usize.get(0).unwrap();
             shared_state.primitives.requested_map_index = *new_save_data.map_usize.get(0).unwrap();
-            console_log!(
-                "new_game map2 {} {}",
-                shared_state.primitives.map_index,
-                new_save_data.map_usize.get(0).unwrap()
-            );
         }
     }
 }

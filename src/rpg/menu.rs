@@ -1,47 +1,44 @@
 use crate::engine::application_types::SceneType::RPGMenu;
 use crate::engine::application_types::StateType;
 use crate::engine::scene::Scene;
-use crate::engine::{
-    ChoiceInstance, ChoiceSetting, ChoiceToken, EmoteMessage, Input, State, SvgRenderer,
-};
+use crate::engine::{ChoiceSetting, EmoteMessage, Input, State};
 use crate::rpg::item::{Item, ItemType};
+use crate::rpg::ChoiceKind::*;
 use crate::rpg::RPGSharedState;
 use crate::svg::animation::{Animation, AnimationSpan};
-use crate::svg::CursorType;
-use crate::Position;
+use crate::svg::Position;
+use crate::svg::{RendererController, SvgRenderer};
 use wasm_bindgen_test::console_log;
 
 pub struct MenuState {
-    choice_instance: ChoiceInstance,
-    menu_renderer: SvgRenderer,
-    inventory_renderer: SvgRenderer,
-    inventory_confirm_renderer: SvgRenderer,
-    common_confirm_renderer: SvgRenderer,
-    emote_renderer: SvgRenderer,
+    renderer_controller: RendererController,
     emotes: Vec<String>,
 }
 
 impl MenuState {
     pub fn create_menu_scene(_: &mut State) -> Scene {
         let choice_setting = ChoiceSetting::get_menu_setting();
-        let choice_instance = choice_setting.get_menu_instance();
         let mut emotes = "👉👆👈👇👍🤨😆🤩🥺"
             .chars()
             .into_iter()
             .map(|c| c.to_string())
             .collect::<Vec<String>>();
         emotes.push("☺️".to_string());
-
+        let mut emote_renderer = SvgRenderer::new(Emote, "menu-emote".to_string(), 45.0);
+        emote_renderer.cursor.set_box_length(5, 2);
         let menu_state = MenuState {
-            choice_instance,
-            menu_renderer: SvgRenderer::new("menu".to_string(), 45.0),
-            inventory_renderer: SvgRenderer::new("menu-inventory".to_string(), 45.0),
-            inventory_confirm_renderer: SvgRenderer::new(
-                "menu-inventory-confirm".to_string(),
-                50.0,
-            ),
-            common_confirm_renderer: SvgRenderer::new("menu-common-confirm".to_string(), 50.0),
-            emote_renderer: SvgRenderer::new("menu-emote".to_string(), 45.0),
+            renderer_controller: RendererController {
+                choice_tree: choice_setting.get_menu_choice_tree(),
+                choice_setting,
+                confirm_index: Some(3),
+                renderers: vec![
+                    SvgRenderer::new(Menu, "menu".to_string(), 45.0),
+                    SvgRenderer::new(ItemInventory, "menu-inventory".to_string(), 45.0),
+                    SvgRenderer::new(ItemOperation, "menu-item-operation".to_string(), 50.0),
+                    SvgRenderer::new(Confirm, "menu-common-confirm".to_string(), 50.0),
+                    emote_renderer,
+                ],
+            },
             emotes,
         };
         let consume_func = menu_state.create_consume_func();
@@ -63,14 +60,7 @@ impl MenuState {
                 ..
             } = scene
             {
-                menu_state.choice_instance = ChoiceSetting::get_menu_setting().get_menu_instance();
-                let labels = menu_state.choice_instance.now_choice.get_branch_labels();
-                menu_state.menu_renderer.load();
-                menu_state
-                    .menu_renderer
-                    .cursor
-                    .update_choice_length(labels.len());
-                menu_state.menu_renderer.render(labels, "");
+                menu_state.renderer_controller.initial_render();
             }
             console_log!("init end");
         }
@@ -93,100 +83,33 @@ impl MenuState {
                             | Input::ArrowDown
                             | Input::ArrowRight
                             | Input::ArrowLeft => {
-                                match menu_state.choice_instance.get_now() {
-                                    ChoiceToken::Menu => {
-                                        menu_state.menu_renderer.cursor.consume(input)
-                                    }
-                                    ChoiceToken::ItemInventory => {
-                                        menu_state.inventory_renderer.cursor.consume(input)
-                                    }
-                                    ChoiceToken::ItemOperation => {
-                                        menu_state.inventory_confirm_renderer.cursor.consume(input)
-                                    }
-                                    ChoiceToken::Confirm => {
-                                        menu_state.common_confirm_renderer.cursor.consume(input)
-                                    }
-                                    ChoiceToken::Emote => {
-                                        menu_state.emote_renderer.cursor.consume(input)
-                                    }
-                                    _ => {}
-                                }
+                                menu_state.renderer_controller.delegate_input(input);
                                 return;
                             }
                             Input::Enter => {
-                                // 決定キーが押された場合、まず choice_instance の状態を先に進める
-                                match menu_state.choice_instance.get_now() {
-                                    ChoiceToken::Menu => {
-                                        menu_state
-                                            .choice_instance
-                                            .choose(menu_state.menu_renderer.cursor.choose_index);
-                                    }
-                                    ChoiceToken::ItemInventory => {
-                                        menu_state.choice_instance.choose(
-                                            menu_state.inventory_renderer.cursor.choose_index,
-                                        );
-                                        menu_state.choice_instance.choose(
-                                            menu_state.inventory_renderer.cursor.choose_index,
-                                        );
-                                    }
-                                    ChoiceToken::ItemOperation => {
-                                        menu_state.choice_instance.choose(
-                                            menu_state
-                                                .inventory_confirm_renderer
-                                                .cursor
-                                                .choose_index,
-                                        );
-                                    }
-                                    ChoiceToken::Emote => {
-                                        menu_state
-                                            .choice_instance
-                                            .choose(menu_state.emote_renderer.cursor.choose_index);
-                                        menu_state
-                                            .choice_instance
-                                            .choose(menu_state.emote_renderer.cursor.choose_index);
-                                    }
-                                    ChoiceToken::Confirm => {
-                                        menu_state.choice_instance.choose(
-                                            menu_state.common_confirm_renderer.cursor.choose_index,
-                                        );
-                                    }
-                                    _ => {
-                                        // TODO
-                                        // 何もしなくていいのか？
-                                    }
-                                }
-                                // 先に進めた choice_instance の状態に応じて、画面を更新
+                                // 決定キーが押された場合、まず choice_tree の状態を先に進める
+                                menu_state.renderer_controller.delegate_enter();
+
+                                // 先に進めた choice_tree の状態に応じて、画面を更新
                                 // 後続処理がないなら return
-                                match menu_state.choice_instance.get_now() {
-                                    ChoiceToken::Close => {
-                                        menu_state.menu_renderer.hide();
-                                        menu_state.menu_renderer.cursor.reset();
+                                match menu_state.renderer_controller.now_choice_kind() {
+                                    CloseMenu => {
+                                        menu_state.renderer_controller.renderers[0].hide();
+                                        menu_state.renderer_controller.renderers[0].cursor.reset();
                                         shared_state.primitives.requested_scene_index -= 2;
                                         return;
                                     }
-                                    ChoiceToken::Emote => {
-                                        menu_state.emote_renderer.load();
+                                    Emote => {
                                         menu_state
-                                            .emote_renderer
-                                            .cursor
-                                            .update_choice_length(menu_state.emotes.len());
-                                        menu_state.emote_renderer.cursor.set_box_length(5, 2);
-                                        menu_state
-                                            .emote_renderer
-                                            .cursor
-                                            .set_cursor_type(CursorType::Box);
-                                        menu_state
-                                            .emote_renderer
-                                            .render(menu_state.emotes.clone(), "");
+                                            .renderer_controller
+                                            .render_with(menu_state.emotes.clone(), "");
                                         return;
                                     }
                                     // インベントリを開いて完了
-                                    ChoiceToken::ItemInventory => {
-                                        menu_state.inventory_renderer.load();
-
-                                        // 何もアイテム持っていない時は続行させない
+                                    ItemInventory => {
+                                        // 何もアイテム持っていない時は続行させない（描画しない）
                                         if rpg_shared_state.characters[0].inventory.is_empty() {
-                                            menu_state.choice_instance.undo();
+                                            menu_state.renderer_controller.undo_choice_tree();
                                             shared_state.interrupt_animations.push(vec![
                                                 Animation::create_message(
                                                     "何も持っていない！".to_string(),
@@ -199,78 +122,62 @@ impl MenuState {
                                                 .map(|i| i.name.clone())
                                                 .collect::<Vec<String>>();
                                             menu_state
-                                                .inventory_renderer
-                                                .cursor
-                                                .update_choice_length(item_names.len());
-                                            menu_state.inventory_renderer.render(item_names, "");
+                                                .renderer_controller
+                                                .render_with(item_names, "");
                                         }
                                         return;
                                     }
-                                    ChoiceToken::ItemOperation => {
-                                        menu_state.inventory_confirm_renderer.load();
+                                    ItemOperation => {
                                         let labels = menu_state
-                                            .choice_instance
+                                            .renderer_controller
+                                            .choice_tree
                                             .now_choice
                                             .get_branch_labels();
-                                        menu_state
-                                            .inventory_confirm_renderer
-                                            .cursor
-                                            .update_choice_length(labels.len());
-                                        menu_state.inventory_confirm_renderer.render(labels, "");
+                                        menu_state.renderer_controller.render_with(labels, "");
                                     }
-                                    ChoiceToken::Equip | ChoiceToken::Chat => {
-                                        menu_state.choice_instance.undo();
+                                    Equip | Chat => {
+                                        shared_state.interrupt_animations.push(vec![
+                                            Animation::create_message("Coming soon...".to_string()),
+                                        ]);
+                                        menu_state.renderer_controller.undo_choice_tree();
                                     }
-                                    ChoiceToken::UseItem => {
-                                        for token in
-                                            menu_state.choice_instance.choice_tokens.clone().iter()
+                                    UseItem => {
+                                        let index = menu_state.renderer_controller.get_chose_nth();
+                                        if index.is_none() {
+                                            return;
+                                        }
+                                        let index = index.unwrap();
+                                        match &rpg_shared_state.characters[0].inventory[index]
+                                            .item_type
                                         {
-                                            if let ChoiceToken::NthChoose(_, index) = token {
-                                                let index = index.unwrap();
-                                                match &rpg_shared_state.characters[0].inventory
-                                                    [index]
-                                                    .item_type
-                                                {
-                                                    ItemType::Weapon => {
-                                                        shared_state.interrupt_animations.push(
-                                                            vec![Animation::create_message(
-                                                                "武器は使用できません".to_string(),
-                                                            )],
-                                                        );
-                                                        menu_state.choice_instance.undo();
-                                                        return;
-                                                    }
-                                                    _ => {}
-                                                }
-                                                let item = Item::new(
-                                                    &rpg_shared_state.characters[0].inventory
-                                                        [index]
-                                                        .name,
-                                                );
-                                                let consume_func = item.consume_func;
-                                                consume_func(&item, rpg_shared_state);
+                                            ItemType::Weapon => {
                                                 shared_state.interrupt_animations.push(vec![
                                                     Animation::create_message(
-                                                        "薬草を使用しました。HPが30回復"
-                                                            .to_string(),
+                                                        "武器は使用できません".to_string(),
                                                     ),
                                                 ]);
-                                                rpg_shared_state.characters[0]
-                                                    .inventory
-                                                    .remove(index);
-                                                menu_state.choice_instance.undo();
+                                                menu_state.renderer_controller.undo_choice_tree();
+                                                return;
                                             }
+                                            _ => {}
                                         }
-                                        menu_state.inventory_confirm_renderer.hide();
-                                        menu_state.inventory_confirm_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.load();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
+                                        let item = Item::new(
+                                            &rpg_shared_state.characters[0].inventory[index].name,
+                                        );
+                                        let consume_func = item.consume_func;
+                                        consume_func(&item, rpg_shared_state);
+                                        shared_state.interrupt_animations.push(vec![
+                                            Animation::create_message(
+                                                "薬草を使用しました。HPが30回復".to_string(),
+                                            ),
+                                        ]);
+                                        rpg_shared_state.characters[0].inventory.remove(index);
+                                        menu_state.renderer_controller.undo_choice_tree();
+                                        menu_state.renderer_controller.delegate_close();
+                                        menu_state.renderer_controller.undo_choice_tree();
                                         // 何もアイテム持っていない時は続行させない
                                         if rpg_shared_state.characters[0].inventory.is_empty() {
-                                            menu_state.inventory_renderer.hide();
-                                            menu_state.choice_instance.undo();
+                                            menu_state.renderer_controller.delegate_close();
                                         } else {
                                             let item_names = rpg_shared_state.characters[0]
                                                 .inventory
@@ -278,83 +185,58 @@ impl MenuState {
                                                 .map(|i| i.name.clone())
                                                 .collect::<Vec<String>>();
                                             menu_state
-                                                .inventory_renderer
-                                                .cursor
-                                                .update_choice_length(item_names.len());
-                                            menu_state.inventory_renderer.render(item_names, "");
+                                                .renderer_controller
+                                                .render_with(item_names, "");
                                         }
                                         return;
                                     }
-                                    ChoiceToken::SendEmote => {
-                                        for token in menu_state.choice_instance.choice_tokens.iter()
-                                        {
-                                            if let ChoiceToken::NthChoose(_, index) = token {
-                                                let index = index.unwrap();
-                                                let emote = menu_state.emotes[index].clone();
-                                                let Position { x, y } =
-                                                    rpg_shared_state.characters[0].position;
+                                    SendEmote => {
+                                        let index = menu_state.renderer_controller.get_chose_nth();
+                                        if index.is_none() {
+                                            return;
+                                        }
+                                        let index = index.unwrap();
+                                        let emote = menu_state.emotes[index].clone();
+                                        let Position { x, y } =
+                                            rpg_shared_state.characters[0].position;
 
-                                                let message = EmoteMessage {
-                                                    user_name: shared_state.user_name.to_owned(),
-                                                    position_x: x,
-                                                    position_y: y,
-                                                    map_index: shared_state.primitives.map_index,
-                                                    emote,
-                                                };
-                                                to_send_channel_messages
-                                                    .push(serde_json::to_string(&message).unwrap());
-                                            }
-                                        }
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
+                                        let message = EmoteMessage {
+                                            user_name: shared_state.user_name.to_owned(),
+                                            position_x: x,
+                                            position_y: y,
+                                            map_index: shared_state.primitives.map_index,
+                                            emote,
+                                        };
+                                        to_send_channel_messages
+                                            .push(serde_json::to_string(&message).unwrap());
+                                        menu_state.renderer_controller.undo_choice_tree();
+                                        menu_state.renderer_controller.undo_choice_tree();
                                         return;
                                     }
-                                    ChoiceToken::Save
-                                    | ChoiceToken::Title
-                                    | ChoiceToken::DropItem => {
+                                    Save | Title | DropItem => {
                                         // Confirm 要素を準備
-                                        let description = menu_state
-                                            .choice_instance
-                                            .now_choice
-                                            .branch_description
-                                            .clone()
-                                            .unwrap();
-                                        menu_state.choice_instance.choose(0);
-                                        menu_state.common_confirm_renderer.load();
-                                        let labels = menu_state
-                                            .choice_instance
-                                            .now_choice
-                                            .get_branch_labels();
-                                        menu_state
-                                            .common_confirm_renderer
-                                            .cursor
-                                            .update_choice_length(labels.len());
-                                        menu_state
-                                            .common_confirm_renderer
-                                            .render(labels, description.as_str());
+                                        menu_state.renderer_controller.delegate_confirm();
                                         return;
                                     }
-                                    // choice_instance 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
-                                    ChoiceToken::Undo => {
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.common_confirm_renderer.hide();
-                                        menu_state.common_confirm_renderer.cursor.reset();
+                                    // choice_tree 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
+                                    Undo => {
+                                        menu_state.renderer_controller.undo_choice_tree();
+                                        menu_state.renderer_controller.delegate_close();
+                                        menu_state.renderer_controller.undo_choice_tree();
                                         return;
                                     }
-                                    // choice_instance 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
-                                    ChoiceToken::Decide => {
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.common_confirm_renderer.hide();
-                                        menu_state.common_confirm_renderer.cursor.reset();
+                                    // choice_tree 巻き戻し（Confirmを必要とした要素まで）、Confirm 要素を隠す
+                                    Decide => {
+                                        // TODO
+                                        // undo, delegate_close, undo が気持ち悪い
+                                        menu_state.renderer_controller.undo_choice_tree();
+                                        menu_state.renderer_controller.delegate_close();
                                     }
                                     _ => {}
                                 }
                                 // Confirm を必要とした要素についてはここでさらに後続処理
-                                match menu_state.choice_instance.get_now() {
-                                    ChoiceToken::Save => {
+                                match menu_state.renderer_controller.now_choice_kind() {
+                                    Save => {
                                         let character = &rpg_shared_state.characters[0];
                                         console_log!(
                                             "character_u32, {},{}",
@@ -387,16 +269,11 @@ impl MenuState {
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_message("セーブしました".to_string()),
                                         ]);
-                                        menu_state.choice_instance.undo();
+                                        menu_state.renderer_controller.undo_choice_tree();
                                         return;
                                     }
-                                    ChoiceToken::Title => {
-                                        menu_state.menu_renderer.hide();
-                                        menu_state.menu_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.hide();
-                                        menu_state.inventory_renderer.cursor.reset();
-                                        menu_state.common_confirm_renderer.hide();
-                                        menu_state.common_confirm_renderer.cursor.reset();
+                                    Title => {
+                                        menu_state.renderer_controller.close_all();
                                         shared_state.primitives.requested_scene_index = 0;
                                         shared_state.interrupt_animations.push(vec![
                                             Animation::create_fade_out_in_with_span(
@@ -405,37 +282,29 @@ impl MenuState {
                                         ]);
                                         return;
                                     }
-                                    ChoiceToken::DropItem => {
-                                        for token in menu_state.choice_instance.choice_tokens.iter()
-                                        {
-                                            if let ChoiceToken::NthChoose(_, index) = token {
-                                                let index = index.unwrap();
-                                                let item_name = &rpg_shared_state.characters[0]
-                                                    .inventory[index]
-                                                    .name
-                                                    .to_owned();
-                                                rpg_shared_state.characters[0]
-                                                    .inventory
-                                                    .remove(index);
-                                                shared_state.interrupt_animations.push(vec![
-                                                    Animation::create_message(format!(
-                                                        "{}を捨てた",
-                                                        item_name
-                                                    )),
-                                                ]);
-                                            }
+                                    DropItem => {
+                                        let index = menu_state.renderer_controller.get_chose_nth();
+                                        if index.is_none() {
+                                            return;
                                         }
-                                        menu_state.inventory_confirm_renderer.hide();
-                                        menu_state.inventory_confirm_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.load();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
-                                        menu_state.choice_instance.undo();
+                                        let index = index.unwrap();
+                                        let item_name = &rpg_shared_state.characters[0].inventory
+                                            [index]
+                                            .name
+                                            .to_owned();
+                                        rpg_shared_state.characters[0].inventory.remove(index);
+                                        shared_state.interrupt_animations.push(vec![
+                                            Animation::create_message(format!(
+                                                "{}を捨てた",
+                                                item_name
+                                            )),
+                                        ]);
+                                        menu_state.renderer_controller.undo_choice_tree();
+                                        menu_state.renderer_controller.delegate_close();
+                                        menu_state.renderer_controller.undo_choice_tree();
                                         // 何もアイテム持っていない時は続行させない
                                         if rpg_shared_state.characters[0].inventory.is_empty() {
-                                            menu_state.inventory_renderer.hide();
-                                            menu_state.choice_instance.undo();
+                                            menu_state.renderer_controller.delegate_close();
                                         } else {
                                             let item_names = rpg_shared_state.characters[0]
                                                 .inventory
@@ -443,10 +312,8 @@ impl MenuState {
                                                 .map(|i| i.name.clone())
                                                 .collect::<Vec<String>>();
                                             menu_state
-                                                .inventory_renderer
-                                                .cursor
-                                                .update_choice_length(item_names.len());
-                                            menu_state.inventory_renderer.render(item_names, "");
+                                                .renderer_controller
+                                                .render_with(item_names, "");
                                         }
                                     }
                                     _ => {}
@@ -454,40 +321,19 @@ impl MenuState {
                             }
 
                             Input::Cancel => {
-                                match menu_state.choice_instance.get_now() {
-                                    ChoiceToken::Menu => {
-                                        menu_state.menu_renderer.hide();
-                                        menu_state.menu_renderer.cursor.reset();
-                                        menu_state.inventory_renderer.hide();
-                                        menu_state.inventory_renderer.cursor.reset();
-                                        menu_state.emote_renderer.hide();
-                                        menu_state.emote_renderer.cursor.reset();
-                                        menu_state.common_confirm_renderer.hide();
-                                        menu_state.common_confirm_renderer.cursor.reset();
+                                menu_state.renderer_controller.delegate_close();
+                                match menu_state.renderer_controller.now_choice_kind() {
+                                    Menu => {
                                         shared_state.primitives.requested_scene_index -= 2;
                                         return;
                                     }
-                                    ChoiceToken::ItemInventory => {
-                                        menu_state.inventory_renderer.hide();
-                                        menu_state.inventory_renderer.cursor.reset();
-                                    }
-                                    ChoiceToken::ItemOperation => {
-                                        menu_state.inventory_confirm_renderer.hide();
-                                        menu_state.inventory_confirm_renderer.cursor.reset();
-                                        menu_state.choice_instance.undo();
-                                    }
-                                    ChoiceToken::Confirm => {
-                                        menu_state.common_confirm_renderer.cursor.reset();
-                                        menu_state.common_confirm_renderer.hide();
-                                        menu_state.choice_instance.undo();
-                                    }
-                                    ChoiceToken::Emote => {
-                                        menu_state.emote_renderer.hide();
-                                        menu_state.emote_renderer.cursor.reset();
+                                    ItemOperation | Confirm => {
+                                        // 追加で undo
+                                        // なぜ？
+                                        menu_state.renderer_controller.undo_choice_tree();
                                     }
                                     _ => {}
                                 }
-                                menu_state.choice_instance.undo();
                             }
                             _ => (),
                         }

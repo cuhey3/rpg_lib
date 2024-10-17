@@ -5,9 +5,9 @@ use crate::engine::{EmoteMessage, Input, PositionMessage, Primitives, References
 use crate::rpg::field::EventType::*;
 use crate::rpg::item::Item;
 use crate::rpg::RPGSharedState;
-use crate::svg::SharedElements;
+use crate::svg::{Position, SharedElements};
 use crate::ws::{ChannelMessage, MessageType};
-use crate::{Animation, Position};
+use crate::Animation;
 use std::cell::RefCell;
 use std::rc::Rc;
 use web_sys::{Document, Element};

@@ -6,6 +6,7 @@ mod ws;
 
 use crate::engine::Engine;
 use svg::animation::Animation;
+use svg::Position;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 struct Area {
@@ -23,12 +24,6 @@ struct CellEvent {
 enum EventType {
     Transition(Area, Position),
     Shop,
-}
-
-#[derive(Clone, Copy)]
-pub struct Position {
-    x: i32,
-    y: i32,
 }
 
 #[wasm_bindgen]
