@@ -1,6 +1,8 @@
 use crate::engine::application_types::StateType;
-use crate::engine::{PositionMessage, State};
-use crate::rpg::{Character, SaveData};
+use crate::engine::state::State;
+use crate::rpg::scenes::field::PositionMessage;
+use crate::rpg::state::character::Character;
+use crate::rpg::SaveData;
 
 pub struct RPGSharedState {
     pub treasure_box_opened: Vec<Vec<usize>>,

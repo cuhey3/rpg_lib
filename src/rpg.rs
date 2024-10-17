@@ -1,29 +1,26 @@
 use crate::engine::application_types::StateType;
-use crate::engine::{Choice, ChoiceSetting, ChoiceTree, Engine, Primitives, References, State};
-use crate::rpg::ChoiceKind::*;
-use crate::svg::animation::Animation;
+use crate::engine::state::{Primitives, References, State};
+use crate::engine::Engine;
+use crate::features::animation::Animation;
+use crate::features::websocket::WebSocketWrapper;
 use crate::svg::Position;
 use crate::svg::SharedElements;
-use crate::ws::WebSocketWrapper;
-use battle::BattleState;
-use event::EventState;
-use field::FieldState;
-use item::Item;
-use menu::MenuState;
+use mechanism::item::Item;
 use rand::Rng;
-use rpg_shared_state::RPGSharedState;
+use scenes::battle::BattleState;
+use scenes::event::EventState;
+use scenes::field::FieldState;
+use scenes::menu::MenuState;
+use scenes::title::TitleState;
 use serde::{Deserialize, Serialize};
+use state::character::Character;
+use state::rpg_shared_state::RPGSharedState;
 use std::cell::RefCell;
 use std::rc::Rc;
-use title::TitleState;
 
-pub mod battle;
-pub mod event;
-pub mod field;
-pub mod item;
-pub mod menu;
-pub mod rpg_shared_state;
-pub mod title;
+pub mod mechanism;
+pub mod scenes;
+pub mod state;
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveData {
@@ -115,14 +112,6 @@ impl SaveData {
     }
 }
 
-pub struct Character {
-    pub current_hp: u32,
-    pub max_hp: u32,
-    pub position: Position,
-    pub inventory: Vec<Item>,
-    pub event_flags: Vec<bool>,
-}
-
 pub fn mount() -> Engine {
     let mut rng = rand::thread_rng();
     let random_number = rng.random::<u16>();
@@ -168,160 +157,4 @@ pub fn mount() -> Engine {
     init_func(&mut scenes[0], &mut shared_state);
     let web_socket_wrapper = WebSocketWrapper::new(shared_state.user_name.to_owned());
     Engine::new(shared_state, scenes, web_socket_wrapper)
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ChoiceKind {
-    Menu,
-    UseItem,
-    DropItem,
-    Yes,
-    No,
-    Battle,
-    Escape,
-    Special,
-    ItemInventory,
-    Spell,
-    Equip,
-    Save,
-    Title,
-    CloseMenu,
-    Emote,
-    SendEmote,
-    Chat,
-    Nth(String),
-    ChoseNth(String, Option<usize>),
-    ItemOperation,
-    Confirm,
-    Decide,
-    Undo,
-    Root,
-}
-
-impl ChoiceKind {
-    pub fn get_choice_string(&self) -> String {
-        match self {
-            Root => "",
-            Menu => "",
-            UseItem => "つかう",
-            DropItem => "すてる",
-            Yes => "はい",
-            No => "いいえ",
-            Battle => "たたかう",
-            Escape => "にげる",
-            Special => "とくぎ",
-            ItemInventory => "どうぐ",
-            Spell => "じゅもん",
-            Equip => "そうび",
-            Save => "セーブ",
-            Title => "タイトル",
-            CloseMenu => "とじる",
-            Emote => "エモート",
-            SendEmote => "",
-            Chat => "チャット",
-            Confirm => "",
-            Undo => "",
-            Decide => "",
-            Nth(..) => "",
-            ChoseNth(..) => "",
-            ItemOperation => "",
-        }
-        .to_string()
-    }
-}
-
-impl ChoiceSetting {
-    fn new() -> ChoiceSetting {
-        ChoiceSetting { choices: vec![] }
-    }
-    fn add_choices(&mut self, choice: &mut Vec<Choice>) -> &mut ChoiceSetting {
-        self.choices.append(choice);
-        self
-    }
-    pub fn get_instance(&self) -> ChoiceTree {
-        let root_choice = Choice {
-            own_token: Root,
-            label: Root.get_choice_string(),
-            branch_description: None,
-            branch: Some(self.choices.clone()),
-        };
-        ChoiceTree {
-            chose_kinds: vec![],
-            choice_list: vec![],
-            choice_indexes: vec![],
-            now_choice: root_choice.clone(),
-            root_choice,
-        }
-    }
-
-    pub fn get_menu_choice_tree(&self) -> ChoiceTree {
-        let root_choice = Choice {
-            own_token: Menu,
-            label: Menu.get_choice_string(),
-            branch_description: None,
-            branch: Some(self.choices.clone()),
-        };
-        ChoiceTree {
-            chose_kinds: vec![],
-            choice_list: vec![],
-            choice_indexes: vec![],
-            now_choice: root_choice.clone(),
-            root_choice,
-        }
-    }
-    pub fn get_menu_setting() -> ChoiceSetting {
-        let use_choice = Choice::no_choice_from(UseItem);
-        let drop_choice = Choice {
-            own_token: DropItem,
-            label: DropItem.get_choice_string(),
-            branch_description: Some("本当に捨てますか？".to_string()),
-            branch: Some(vec![Choice::confirm_choice()]),
-        };
-        let mut setting = ChoiceSetting::new();
-        setting.add_choices(&mut vec![
-            Choice {
-                own_token: ItemInventory,
-                label: "".to_string(),
-                branch_description: None,
-                branch: Some(vec![Choice {
-                    own_token: ChoseNth("Item".to_string(), None),
-                    label: "".to_string(),
-                    branch_description: None,
-                    branch: Some(vec![Choice {
-                        own_token: ItemOperation,
-                        label: "".to_string(),
-                        branch_description: None,
-                        branch: Some(vec![use_choice.clone(), drop_choice.clone()]),
-                    }]),
-                }]),
-            },
-            Choice::no_choice_from(Equip),
-            Choice {
-                own_token: Emote,
-                label: "".to_string(),
-                branch_description: None,
-                branch: Some(vec![Choice {
-                    own_token: ChoseNth("Emote".to_string(), None),
-                    label: "".to_string(),
-                    branch_description: None,
-                    branch: Some(vec![Choice::no_choice_from(SendEmote)]),
-                }]),
-            },
-            Choice::no_choice_from(Chat),
-            Choice {
-                own_token: Save,
-                label: "".to_string(),
-                branch_description: Some("セーブを上書きします。よろしいですか？".to_string()),
-                branch: Some(vec![Choice::confirm_choice()]),
-            },
-            Choice {
-                own_token: Title,
-                label: "".to_string(),
-                branch_description: Some("タイトルに戻ります。よろしいですか？".to_string()),
-                branch: Some(vec![Choice::confirm_choice()]),
-            },
-            Choice::no_choice_from(CloseMenu),
-        ]);
-        setting
-    }
 }

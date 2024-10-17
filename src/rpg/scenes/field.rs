@@ -1,13 +1,16 @@
 use crate::engine::application_types::SceneType::RPGField;
 use crate::engine::application_types::StateType;
+use crate::engine::input::Input;
 use crate::engine::scene::Scene;
-use crate::engine::{EmoteMessage, Input, PositionMessage, Primitives, References, State};
-use crate::rpg::field::EventType::*;
-use crate::rpg::item::Item;
+use crate::engine::state::{Primitives, References, State};
+use crate::features::emote::EmoteMessage;
+use crate::features::websocket::{ChannelMessage, MessageType};
+use crate::rpg::mechanism::item::Item;
+use crate::rpg::scenes::field::EventType::*;
 use crate::rpg::RPGSharedState;
 use crate::svg::{Position, SharedElements};
-use crate::ws::{ChannelMessage, MessageType};
 use crate::Animation;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 use web_sys::{Document, Element};
@@ -37,7 +40,7 @@ impl FieldState {
                 .query_selector(".character.direction")
                 .unwrap()
                 .unwrap();
-            let field_state = FieldState {
+            let mut field_state = FieldState {
                 character_direction_element,
                 wrapper_element: shared_state
                     .elements
@@ -51,12 +54,14 @@ impl FieldState {
             };
             let consume_func = field_state.create_consume_func();
             let init_func = field_state.create_init_func();
+            let update_map_func = field_state.create_update_map_func();
             let scene_type = RPGField(field_state);
             Scene {
                 element_id: "field".to_string(),
                 scene_type,
                 consume_func,
                 init_func,
+                update_map_func,
             }
         } else {
             panic!()
@@ -277,22 +282,27 @@ impl FieldState {
         }
         consume_func
     }
-    pub fn update_map(&mut self, shared_state: &mut State) {
-        if let State {
-            state_type: StateType::RPGShared(rpg_shared_state),
-            primitives,
-            elements,
-            ..
-        } = shared_state
-        {
-            let map = &mut self.maps[primitives.map_index];
-            map.init_treasure_box_opened(rpg_shared_state);
-            map.draw(rpg_shared_state, elements);
-            self.update_character_position(
-                rpg_shared_state.characters[0].position.x,
-                rpg_shared_state.characters[0].position.y,
-            );
+    pub fn create_update_map_func(&mut self) -> fn(&mut Scene, &mut State) {
+        fn update_map_func(scene: &mut Scene, shared_state: &mut State) {
+            if let State {
+                state_type: StateType::RPGShared(rpg_shared_state),
+                primitives,
+                elements,
+                ..
+            } = shared_state
+            {
+                if let RPGField(field_state) = &mut scene.scene_type {
+                    let map = &mut field_state.maps[primitives.map_index];
+                    map.init_treasure_box_opened(rpg_shared_state);
+                    map.draw(rpg_shared_state, elements);
+                    field_state.update_character_position(
+                        rpg_shared_state.characters[0].position.x,
+                        rpg_shared_state.characters[0].position.y,
+                    );
+                }
+            }
         }
+        update_map_func
     }
     pub fn consume_emote_message(&mut self, message: EmoteMessage, shared_state: &mut State) {
         if shared_state.primitives.map_index != message.map_index {
@@ -744,4 +754,38 @@ enum EventType {
     TreasureBox,
     Obstacle(ObstacleType),
     MapConnection(MapConnectionDetail),
+}
+
+impl State {
+    pub fn send_own_position(&mut self, input: Option<Input>) {
+        if let State {
+            state_type: StateType::RPGShared(rpg_shared_state),
+            primitives,
+            to_send_channel_messages,
+            ..
+        } = self
+        {
+            let message = PositionMessage {
+                user_name: self.user_name.to_owned(),
+                direction: if input.is_none() {
+                    Input::ArrowDown
+                } else {
+                    input.unwrap()
+                },
+                position_x: rpg_shared_state.characters[0].position.x,
+                position_y: rpg_shared_state.characters[0].position.y,
+                map_index: primitives.requested_map_index,
+            };
+            to_send_channel_messages.push(serde_json::to_string(&message).unwrap());
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PositionMessage {
+    pub user_name: String,
+    pub direction: Input,
+    pub position_x: i32,
+    pub position_y: i32,
+    pub map_index: usize,
 }

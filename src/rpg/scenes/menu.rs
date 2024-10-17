@@ -1,13 +1,16 @@
 use crate::engine::application_types::SceneType::RPGMenu;
 use crate::engine::application_types::StateType;
+use crate::engine::choice::ChoiceSetting;
+use crate::engine::input::Input;
 use crate::engine::scene::Scene;
-use crate::engine::{ChoiceSetting, EmoteMessage, Input, State};
-use crate::rpg::item::{Item, ItemType};
-use crate::rpg::ChoiceKind::*;
+use crate::engine::state::State;
+use crate::features::animation::{Animation, AnimationSpan};
+use crate::features::emote::EmoteMessage;
+use crate::rpg::mechanism::choice_kind::ChoiceKind::*;
+use crate::rpg::mechanism::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
-use crate::svg::animation::{Animation, AnimationSpan};
+use crate::svg::svg_renderer::{RendererController, SvgRenderer};
 use crate::svg::Position;
-use crate::svg::{RendererController, SvgRenderer};
 use wasm_bindgen_test::console_log;
 
 pub struct MenuState {
@@ -17,7 +20,6 @@ pub struct MenuState {
 
 impl MenuState {
     pub fn create_menu_scene(_: &mut State) -> Scene {
-        let choice_setting = ChoiceSetting::get_menu_setting();
         let mut emotes = "👉👆👈👇👍🤨😆🤩🥺"
             .chars()
             .into_iter()
@@ -28,8 +30,7 @@ impl MenuState {
         emote_renderer.cursor.set_box_length(5, 2);
         let menu_state = MenuState {
             renderer_controller: RendererController {
-                choice_tree: choice_setting.get_menu_choice_tree(),
-                choice_setting,
+                choice_tree: ChoiceSetting::get_menu_setting().get_menu_choice_tree(),
                 confirm_index: Some(3),
                 renderers: vec![
                     SvgRenderer::new(Menu, "menu".to_string(), 45.0),
@@ -49,6 +50,7 @@ impl MenuState {
             scene_type,
             consume_func,
             init_func,
+            update_map_func: Scene::create_update_map_func_empty(),
         }
     }
 

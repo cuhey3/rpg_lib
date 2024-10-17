@@ -1,11 +1,11 @@
 pub mod engine;
+mod features;
 mod rpg;
 mod svg;
 mod utils;
-mod ws;
 
 use crate::engine::Engine;
-use svg::animation::Animation;
+use features::animation::Animation;
 use svg::Position;
 use wasm_bindgen::prelude::wasm_bindgen;
 

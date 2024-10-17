@@ -1,10 +1,11 @@
 use crate::engine::application_types::SceneType::RPGTitle;
 use crate::engine::application_types::StateType::RPGShared;
+use crate::engine::input::Input;
 use crate::engine::scene::Scene;
-use crate::engine::{Input, State};
+use crate::engine::state::State;
+use crate::features::animation::Animation;
 use crate::rpg::RPGSharedState;
-use crate::svg::animation::Animation;
-use crate::svg::Cursor;
+use crate::svg::svg_renderer::Cursor;
 
 pub struct TitleState {
     cursor: Cursor,
@@ -24,6 +25,7 @@ impl TitleState {
             scene_type,
             consume_func,
             init_func,
+            update_map_func: Scene::create_update_map_func_empty(),
         }
     }
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
@@ -44,11 +46,11 @@ impl TitleState {
                         title_state.cursor.consume(input);
                     }
                     Input::Enter => {
-                        if title_state.cursor.choose_index == 2 {
+                        if title_state.cursor.chose_index == 2 {
                             return;
                         }
                         shared_state.primitives.requested_scene_index = 1;
-                        if title_state.cursor.choose_index == 0 {
+                        if title_state.cursor.chose_index == 0 {
                             RPGSharedState::new_game(shared_state);
                         } else {
                             RPGSharedState::load_save_data(shared_state);
