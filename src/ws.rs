@@ -38,6 +38,7 @@ pub struct WebSocketState {
     pub is_opened: bool,
     pub is_closed: bool,
     pub is_joined: bool,
+    pub has_connection_request: bool,
 }
 
 impl WebSocketWrapper {
@@ -50,6 +51,7 @@ impl WebSocketWrapper {
                 is_opened: false,
                 is_closed: false,
                 is_joined: false,
+                has_connection_request: true,
             })),
             messages: Rc::new(RefCell::new(vec![])),
             user_name: user_name.to_owned(),
@@ -73,6 +75,7 @@ impl WebSocketWrapper {
                 .unwrap();
             let mut state_clone = state_clone.borrow_mut();
             (*state_clone).is_opened = true;
+            (*state_clone).has_connection_request = false;
             (*state_clone).is_closed = false;
             (*state_clone).is_joined = false;
         });
@@ -109,6 +112,10 @@ impl WebSocketWrapper {
         self.state.borrow_mut().is_opened && !self.state.borrow_mut().is_closed
     }
 
+    pub fn is_connecting(&self) -> bool {
+        self.state.borrow_mut().has_connection_request
+    }
+
     pub fn join(&mut self) {
         let join_message = ChannelMessage {
             user_name: self.user_name.to_owned(),
@@ -133,8 +140,7 @@ impl WebSocketWrapper {
     }
     pub fn send_message(&mut self, message: String) {
         if !self.is_ready() {
-            console_log!("reconnect websocket...");
-            self.reconnect();
+            console_log!("websocket connection does not ready...");
             return;
         }
         self.ws
@@ -143,7 +149,11 @@ impl WebSocketWrapper {
     }
 
     // Need to wait for onopen event elsewhere
-    pub fn reconnect(&mut self) {
+    pub fn request_reconnect(&mut self) {
+        if self.is_connecting() {
+            return;
+        }
+        self.state.borrow_mut().has_connection_request = true;
         self.ws =
             WebSocket::new("https://rust-server-956911707039.asia-northeast1.run.app/ws").unwrap();
         self.set_callbacks();

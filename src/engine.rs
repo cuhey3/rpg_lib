@@ -77,11 +77,23 @@ impl Engine {
         }
     }
     pub fn animate(&mut self, step: f64) {
+        // 送るべきメッセージが存在していてWebSocketが切れていれば再接続
+        if !self.web_socket_wrapper.is_ready()
+            && !self.shared_state.to_send_channel_messages.is_empty()
+        {
+            self.web_socket_wrapper.request_reconnect();
+        }
+
+        // WebSocketに届いたメッセージをアプリケーションに処理させる
         while !(*self.web_socket_wrapper.messages.borrow_mut()).is_empty() {
             let mut message = (*self.web_socket_wrapper.messages.borrow_mut()).remove(0);
             self.receive_channel_message(&mut message);
         }
-        while !self.shared_state.to_send_channel_messages.is_empty() {
+
+        // 送るべきメッセージが存在していてWebSocket接続が準備できていれば全て送信
+        while self.web_socket_wrapper.is_ready()
+            && !self.shared_state.to_send_channel_messages.is_empty()
+        {
             let message = self.shared_state.to_send_channel_messages.remove(0);
             self.web_socket_wrapper.send_message(message);
         }
