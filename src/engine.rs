@@ -59,10 +59,6 @@ impl Engine {
         let consume_func = self.scenes[scene_index].consume_func;
         console_log!("consume start scene: {:?}", scene_index);
         consume_func(&mut self.scenes[scene_index], &mut self.shared_state, input);
-        while !self.shared_state.to_send_channel_messages.is_empty() {
-            let message = self.shared_state.to_send_channel_messages.remove(0);
-            self.web_socket_wrapper.send_message(message);
-        }
         if !self.has_animation_blocking_scene_update() {
             if self.shared_state.primitives.scene_index
                 != self.shared_state.primitives.requested_scene_index
@@ -85,9 +81,10 @@ impl Engine {
             let mut message = (*self.web_socket_wrapper.messages.borrow_mut()).remove(0);
             self.receive_channel_message(&mut message);
         }
-        // for animation in self.shared_state.interrupt_animations.iter_mut() {
-        //     animation.get_mut(0).unwrap().set_step(step);
-        // }
+        while !self.shared_state.to_send_channel_messages.is_empty() {
+            let message = self.shared_state.to_send_channel_messages.remove(0);
+            self.web_socket_wrapper.send_message(message);
+        }
 
         let mut to_delete_indexes = vec![];
         for (index, animation) in self
@@ -291,6 +288,31 @@ pub struct State {
     pub references: Rc<RefCell<References>>,
 }
 
+impl State {
+    pub fn send_own_position(&mut self, input: Option<Input>) {
+        if let State {
+            state_type: StateType::RPGShared(rpg_shared_state),
+            primitives,
+            to_send_channel_messages,
+            ..
+        } = self
+        {
+            let message = PositionMessage {
+                user_name: self.user_name.to_owned(),
+                direction: if input.is_none() {
+                    Input::ArrowDown
+                } else {
+                    input.unwrap()
+                },
+                position_x: rpg_shared_state.characters[0].position.x,
+                position_y: rpg_shared_state.characters[0].position.y,
+                map_index: primitives.requested_map_index,
+            };
+            to_send_channel_messages.push(serde_json::to_string(&message).unwrap());
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Input {
     Enter,
@@ -307,7 +329,7 @@ impl Input {
     pub fn from(key: String) -> Input {
         match key.as_str() {
             "a" => Input::Enter,
-            "Escape" => Input::Cancel,
+            "z" => Input::Cancel,
             "ArrowRight" => Input::ArrowRight,
             "ArrowLeft" => Input::ArrowLeft,
             "ArrowUp" => Input::ArrowUp,

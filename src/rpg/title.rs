@@ -14,7 +14,7 @@ impl TitleState {
     pub fn create_title_scene(shared_state: &mut State) -> Scene {
         let document = &shared_state.elements.document;
         let title_state = TitleState {
-            cursor: Cursor::new(document, "title-cursor", 3, 60.0),
+            cursor: Cursor::new(document, "title-cursor", 2, 60.0),
         };
         let consume_func = title_state.create_consume_func();
         let init_func = title_state.create_init_func();

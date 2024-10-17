@@ -10,7 +10,6 @@ use crate::ws::{ChannelMessage, MessageType};
 use crate::{Animation, Position};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen_test::console_log;
 use web_sys::{Document, Element};
 
 pub struct FieldState {
@@ -223,7 +222,7 @@ impl FieldState {
                 {
                     rpg_shared_state.characters[0].position = Position::new(360, 280);
                 }
-                console_log!("init end");
+                shared_state.send_own_position(None);
             }
         }
         init_func
@@ -235,7 +234,6 @@ impl FieldState {
                 primitives,
                 references,
                 interrupt_animations,
-                to_send_channel_messages,
                 ..
             } = shared_state
             {
@@ -265,15 +263,7 @@ impl FieldState {
                                     interrupt_animations,
                                     input.clone(),
                                 );
-                                let message = PositionMessage {
-                                    user_name: shared_state.user_name.to_owned(),
-                                    direction: input.clone(),
-                                    position_x: rpg_shared_state.characters[0].position.x,
-                                    position_y: rpg_shared_state.characters[0].position.y,
-                                    map_index: primitives.requested_map_index,
-                                };
-                                to_send_channel_messages
-                                    .push(serde_json::to_string(&message).unwrap());
+                                shared_state.send_own_position(Some(input.clone()));
                             }
                             Input::Cancel => {
                                 primitives.requested_scene_index += 2;
@@ -363,6 +353,13 @@ impl FieldState {
                 _ => {}
             }
             self.maps[primitives.map_index].draw(rpg_shared_state, elements);
+            // Joinの分は rpg_shared_state 使用の後に持ってこないと、second immutable borrow でビルド失敗する
+            match message.message_type {
+                MessageType::Join => {
+                    shared_state.send_own_position(None);
+                }
+                _ => {}
+            }
         }
     }
 }

@@ -137,12 +137,12 @@ impl Animation {
                         .unwrap();
                     emote_element.set_inner_html(animation.messages[1].as_str());
                     emote_element
-                        .set_attribute("x", (x + 3_f64).to_string().as_str())
+                        .set_attribute("x", (x + 1.5_f64).to_string().as_str())
                         .unwrap();
                     emote_element
-                        .set_attribute("y", (y - 17_f64).to_string().as_str())
+                        .set_attribute("y", (y - 19.5_f64).to_string().as_str())
                         .unwrap();
-                    emote_element.set_attribute("font-size", "35").unwrap();
+                    emote_element.set_attribute("font-size", "30").unwrap();
                     let emote_background = web_sys::window()
                         .unwrap()
                         .document()
