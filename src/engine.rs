@@ -1,7 +1,5 @@
 use crate::features::animation::Animation;
-use crate::features::emote::EmoteMessage;
 use crate::features::websocket::{ChannelMessage, WebSocketWrapper};
-use application_types::SceneType::RPGField;
 use input::Input;
 use scene::Scene;
 use state::State;
@@ -37,7 +35,7 @@ impl Engine {
 
     pub fn keydown(&mut self, key: String) {
         let input = Input::from(key);
-        if self.shared_state.references.borrow_mut().has_message {
+        if self.shared_state.references.borrow_mut().has_block_message {
             if !self
                 .shared_state
                 .references
@@ -46,7 +44,7 @@ impl Engine {
             {
                 self.shared_state.elements.message.hide();
             }
-            (*self.shared_state.references.borrow_mut()).has_message = false;
+            (*self.shared_state.references.borrow_mut()).has_block_message = false;
             return;
         }
         if self.has_animation_blocking_scene_update() {
@@ -63,7 +61,7 @@ impl Engine {
             {
                 self.shared_state.primitives.scene_index =
                     self.shared_state.primitives.requested_scene_index;
-                self.on_scene_update()
+                self.on_scene_update();
             }
             if self.shared_state.primitives.map_index
                 != self.shared_state.primitives.requested_map_index
@@ -87,17 +85,13 @@ impl Engine {
         if scene_index == 0 && self.web_socket_wrapper.state.borrow_mut().is_joined {
             self.web_socket_wrapper.left();
         }
-        // TODO
-        // メニュー画面だけ特別扱いしていて、シーンを追加するとメニューのインデックスがずれる
-        if scene_index != 4 {
-            for (index, scene) in self.scenes.iter_mut().enumerate() {
-                if index != scene_index {
-                    scene.hide();
-                }
+        if !self.scenes[scene_index].is_partial_scene {
+            // メニューからタイトルなどもあるので遷移先が is_partial_scene でないなら一括で隠す
+            for scene in self.scenes.iter() {
+                scene.hide();
             }
         }
         let init_func = self.scenes[scene_index].init_func;
-
         init_func(&mut self.scenes[scene_index], &mut self.shared_state);
     }
 
@@ -118,27 +112,16 @@ impl Engine {
     }
 
     fn receive_channel_message(&mut self, channel_message: &mut ChannelMessage) {
+        let mut message = channel_message.message.to_owned();
+        // TODO
+        // ネストしたJSONの扱い…
+        while let Ok(message_string) = serde_json::from_str::<String>(&message) {
+            message = message_string
+        }
+        channel_message.message = message;
         for scene in self.scenes.iter_mut() {
-            if let Scene {
-                scene_type: RPGField(field_state),
-                ..
-            } = scene
-            {
-                let mut message = channel_message.message.to_owned();
-                // TODO
-                // ネストしたJSONの扱い…
-                while let Ok(message_string) = serde_json::from_str::<String>(&message) {
-                    message = message_string
-                }
-                if let Ok(emote_message) = serde_json::from_str::<EmoteMessage>(&message) {
-                    field_state.consume_emote_message(emote_message, &mut self.shared_state);
-                    return;
-                }
-                if channel_message.user_name != self.web_socket_wrapper.user_name {
-                    channel_message.message = message;
-                    field_state.consume_channel_message(&channel_message, &mut self.shared_state);
-                }
-            }
+            let consume_channel_message_func = scene.consume_channel_message_func;
+            consume_channel_message_func(scene, &mut self.shared_state, &channel_message);
         }
     }
 

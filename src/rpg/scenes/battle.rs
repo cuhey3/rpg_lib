@@ -41,9 +41,11 @@ impl BattleState {
         Scene {
             element_id: "battle".to_string(),
             scene_type,
+            is_partial_scene: false,
             consume_func,
             init_func,
             update_map_func: Scene::create_update_map_func_empty(),
+            consume_channel_message_func: Scene::create_consume_channel_message_func_empty(),
         }
     }
 

@@ -133,7 +133,7 @@ impl Animation {
             elements,
             span: AnimationSpan::None,
             animation_func: |animation, references, _| {
-                if references.borrow_mut().has_message {
+                if references.borrow_mut().has_block_message {
                     return false;
                 }
                 if animation.messages.is_empty() {
@@ -141,7 +141,7 @@ impl Animation {
                     return true;
                 }
                 animation.block_scene_update = true;
-                references.borrow_mut().has_message = true;
+                references.borrow_mut().has_block_message = true;
                 animation.elements[0]
                     .set_attribute("display", "block")
                     .unwrap();
@@ -169,7 +169,7 @@ impl Animation {
             elements,
             span: AnimationSpan::None,
             animation_func: |animation, references, _| {
-                if references.borrow_mut().has_message {
+                if references.borrow_mut().has_block_message {
                     return false;
                 }
                 if animation.messages.is_empty() {
@@ -177,7 +177,7 @@ impl Animation {
                     return true;
                 }
                 animation.block_scene_update = true;
-                references.borrow_mut().has_message = true;
+                references.borrow_mut().has_block_message = true;
                 animation.elements[0]
                     .set_attribute("display", "block")
                     .unwrap();

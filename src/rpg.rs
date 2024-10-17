@@ -142,7 +142,7 @@ pub fn mount() -> Engine {
             requested_map_index: 0,
         },
         references: Rc::new(RefCell::new(References {
-            has_message: false,
+            has_block_message: false,
             has_continuous_message: false,
         })),
     };

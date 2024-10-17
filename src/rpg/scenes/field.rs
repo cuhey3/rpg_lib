@@ -55,13 +55,16 @@ impl FieldState {
             let consume_func = field_state.create_consume_func();
             let init_func = field_state.create_init_func();
             let update_map_func = field_state.create_update_map_func();
+            let consume_channel_message_func = field_state.create_consume_channel_message_func();
             let scene_type = RPGField(field_state);
             Scene {
                 element_id: "field".to_string(),
                 scene_type,
+                is_partial_scene: false,
                 consume_func,
                 init_func,
                 update_map_func,
+                consume_channel_message_func,
             }
         } else {
             panic!()
@@ -313,64 +316,87 @@ impl FieldState {
             .interrupt_animations
             .push(vec![Animation::show_emote(message, own_emote)]);
     }
-    pub fn consume_channel_message(&mut self, message: &ChannelMessage, shared_state: &mut State) {
-        if let State {
-            state_type: StateType::RPGShared(rpg_shared_state),
-            primitives,
-            elements,
-            ..
-        } = shared_state
-        {
-            let found = rpg_shared_state
-                .online_users
-                .iter_mut()
-                .enumerate()
-                .find(|(_, user)| user.user_name == message.user_name);
-            match message.message_type {
-                MessageType::Left => {
-                    if found.is_some() {
-                        let remove_index = found.unwrap().0;
-                        rpg_shared_state.online_users.remove(remove_index);
+
+    pub fn create_consume_channel_message_func(
+        &mut self,
+    ) -> fn(&mut Scene, &mut State, message: &ChannelMessage) {
+        fn consume_channel_message(
+            scene: &mut Scene,
+            shared_state: &mut State,
+            message: &ChannelMessage,
+        ) {
+            if let Scene {
+                scene_type: RPGField(field_state),
+                ..
+            } = scene
+            {
+                if let Ok(emote_message) = serde_json::from_str::<EmoteMessage>(&message.message) {
+                    field_state.consume_emote_message(emote_message, shared_state);
+                    return;
+                }
+                if message.user_name == shared_state.user_name {
+                    return;
+                }
+                if let State {
+                    state_type: StateType::RPGShared(rpg_shared_state),
+                    primitives,
+                    elements,
+                    ..
+                } = shared_state
+                {
+                    let found = rpg_shared_state
+                        .online_users
+                        .iter_mut()
+                        .enumerate()
+                        .find(|(_, user)| user.user_name == message.user_name);
+                    match message.message_type {
+                        MessageType::Left => {
+                            if found.is_some() {
+                                let remove_index = found.unwrap().0;
+                                rpg_shared_state.online_users.remove(remove_index);
+                            }
+                        }
+                        MessageType::Message => {
+                            if let Ok(online_user) =
+                                serde_json::from_str::<PositionMessage>(&message.message)
+                            {
+                                if found.is_some() {
+                                    let found = found.unwrap().1;
+                                    found.map_index = online_user.map_index;
+                                    found.direction = online_user.direction;
+                                    found.position_x = online_user.position_x;
+                                    found.position_y = online_user.position_y;
+                                } else {
+                                    rpg_shared_state.online_users.push(online_user);
+                                }
+                            } else if let Ok(message) =
+                                serde_json::from_str::<ChannelMessage>(&message.message)
+                            {
+                                match message.message_type {
+                                    MessageType::Left => {
+                                        if found.is_some() {
+                                            let remove_index = found.unwrap().0;
+                                            rpg_shared_state.online_users.remove(remove_index);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            };
+                        }
+                        _ => {}
+                    }
+                    field_state.maps[primitives.map_index].draw(rpg_shared_state, elements);
+                    // Joinの分は rpg_shared_state 使用の後に持ってこないと、second immutable borrow でビルド失敗する
+                    match message.message_type {
+                        MessageType::Join => {
+                            shared_state.send_own_position(None);
+                        }
+                        _ => {}
                     }
                 }
-                MessageType::Message => {
-                    if let Ok(online_user) =
-                        serde_json::from_str::<PositionMessage>(&message.message)
-                    {
-                        if found.is_some() {
-                            let found = found.unwrap().1;
-                            found.map_index = online_user.map_index;
-                            found.direction = online_user.direction;
-                            found.position_x = online_user.position_x;
-                            found.position_y = online_user.position_y;
-                        } else {
-                            rpg_shared_state.online_users.push(online_user);
-                        }
-                    } else if let Ok(message) =
-                        serde_json::from_str::<ChannelMessage>(&message.message)
-                    {
-                        match message.message_type {
-                            MessageType::Left => {
-                                if found.is_some() {
-                                    let remove_index = found.unwrap().0;
-                                    rpg_shared_state.online_users.remove(remove_index);
-                                }
-                            }
-                            _ => {}
-                        }
-                    };
-                }
-                _ => {}
-            }
-            self.maps[primitives.map_index].draw(rpg_shared_state, elements);
-            // Joinの分は rpg_shared_state 使用の後に持ってこないと、second immutable borrow でビルド失敗する
-            match message.message_type {
-                MessageType::Join => {
-                    shared_state.send_own_position(None);
-                }
-                _ => {}
             }
         }
+        consume_channel_message
     }
 }
 

@@ -12,7 +12,7 @@ pub struct Primitives {
 }
 
 pub struct References {
-    pub has_message: bool,
+    pub has_block_message: bool,
     pub has_continuous_message: bool,
 }
 
