@@ -12,11 +12,13 @@ impl Item {
         let item_type: ItemType = match name {
             "薬草" => ItemType::Consumable,
             "棍棒" => ItemType::Weapon,
+            "最初の鍵" => ItemType::Key,
             _ => panic!(),
         };
         let description = match name {
             "薬草" => "HPを30回復",
             "棍棒" => "粗悪な武器",
+            "最初の鍵" => "簡単な鍵を開けることができる",
             _ => "",
         }
         .to_string();
@@ -47,5 +49,6 @@ impl Item {
 
 pub enum ItemType {
     Weapon,
+    Key,
     Consumable,
 }

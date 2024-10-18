@@ -50,7 +50,7 @@ impl FieldState {
                     .unwrap(),
                 wrapper_translate_x: 0,
                 wrapper_translate_y: 0,
-                maps: vec![map, Map::init_2(), Map::init_3()],
+                maps: vec![map, Map::init_2(), Map::init_3(), Map::init_4()],
             };
             let consume_func = field_state.create_consume_func();
             let init_func = field_state.create_init_func();
@@ -73,6 +73,7 @@ impl FieldState {
     pub fn move_to(
         &mut self,
         rpg_shared_state: &mut RPGSharedState,
+        elements: &mut SharedElements,
         primitives: &mut Primitives,
         _: Rc<RefCell<References>>,
         interrupt_animations: &mut Vec<Vec<Animation>>,
@@ -108,7 +109,8 @@ impl FieldState {
         let found_event = map
             .event_positions
             .iter()
-            .find(|(position, _)| position.x == x && position.y == y);
+            .enumerate()
+            .find(|(_, event)| event.0.x == x && event.0.y == y);
         if found_event.is_none() {
             match input {
                 Input::ArrowUp | Input::ArrowDown | Input::ArrowRight | Input::ArrowLeft => {
@@ -121,20 +123,46 @@ impl FieldState {
             }
             return;
         }
-        let found_event = found_event.unwrap();
-        match found_event.1 {
+        let (event_index, found_event) = found_event.unwrap();
+        match found_event.1.clone() {
+            Gate(key_name) => {
+                if !key_name.is_empty() {
+                    let has_key = rpg_shared_state.characters[0]
+                        .inventory
+                        .iter()
+                        .find(|item| item.name == key_name)
+                        .is_some();
+                    if has_key {
+                        interrupt_animations.push(vec![Animation::create_message(format!(
+                            "{}を使用した",
+                            key_name
+                        ))]);
+                        map.event_positions.remove(event_index);
+                        map.draw(rpg_shared_state, elements);
+                        return;
+                    } else {
+                        interrupt_animations.push(vec![Animation::create_message(
+                            "鍵がかかっている".to_string(),
+                        )]);
+                        self.reset_translate(original_translate_x, original_translate_y);
+                        return;
+                    }
+                } else {
+                    // ただの扉
+                }
+            }
             Enemy => {
                 primitives.requested_scene_index += 1;
                 interrupt_animations.push(vec![Animation::create_fade_out_in()]);
                 self.reset_translate(original_translate_x, original_translate_y);
                 return;
             }
-            TreasureBox => {
+            TreasureBox(key_name) => {
                 let treasure_events = map
                     .event_positions
                     .iter()
                     .filter(|(_, event_type)| match event_type {
-                        TreasureBox => true,
+                        TreasureBox(..) => true,
                         _ => false,
                     })
                     .collect::<Vec<&(Position, EventType)>>();
@@ -150,6 +178,25 @@ impl FieldState {
                 if opened {
                     self.reset_translate(original_translate_x, original_translate_y);
                     return;
+                }
+                if !key_name.is_empty() {
+                    let has_key = rpg_shared_state.characters[0]
+                        .inventory
+                        .iter()
+                        .find(|item| item.name == key_name)
+                        .is_some();
+                    if has_key {
+                        interrupt_animations.push(vec![Animation::create_message(format!(
+                            "{}を使用した",
+                            key_name
+                        ))]);
+                    } else {
+                        interrupt_animations.push(vec![Animation::create_message(
+                            "鍵がかかっている".to_string(),
+                        )]);
+                        self.reset_translate(original_translate_x, original_translate_y);
+                        return;
+                    }
                 }
                 rpg_shared_state.treasure_box_opened[map.map_index].push(treasure_index);
                 map.treasure_elements[treasure_index]
@@ -240,6 +287,7 @@ impl FieldState {
             if let State {
                 state_type: StateType::RPGShared(rpg_shared_state),
                 primitives,
+                elements,
                 references,
                 interrupt_animations,
                 ..
@@ -266,6 +314,7 @@ impl FieldState {
                             | Input::ArrowLeft => {
                                 field_state.move_to(
                                     rpg_shared_state,
+                                    elements,
                                     primitives,
                                     references.clone(),
                                     interrupt_animations,
@@ -461,9 +510,35 @@ impl Map {
     ) {
         let mut treasure_elements = vec![];
         let mut treasure_index = 0_usize;
+        // TODO
+        // 描画順のスマートなコントロール
         for (position, event_type) in self.event_positions.iter() {
+            match event_type {
+                MapConnection(..) => {
+                    let rect = document
+                        .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "rect")
+                        .unwrap();
+                    rect.set_attribute("x", &*position.x.to_string()).unwrap();
+                    rect.set_attribute("y", &*position.y.to_string()).unwrap();
+                    rect.set_attribute("fill", "black").unwrap();
+                    rect.set_attribute("width", "40").unwrap();
+                    rect.set_attribute("height", "40").unwrap();
+                    rect.class_list()
+                        .add_2("_object", "map-connection")
+                        .unwrap();
+                    parent.append_child(&*rect).unwrap();
+                }
+                _ => {}
+            }
+        }
+
+        for (position, event_type) in self.event_positions.iter() {
+            match event_type {
+                MapConnection(..) => continue,
+                _ => {}
+            }
             let rect_color = match event_type {
-                TreasureBox => {
+                TreasureBox(..) => {
                     let opened = treasure_box_opened
                         .iter()
                         .find(|contained_index| **contained_index == treasure_index);
@@ -475,20 +550,23 @@ impl Map {
                     }
                 }
                 Enemy => "red",
+                Gate(..) => "brown",
                 Obstacle(obstacle_type) => &*obstacle_type.get_color(),
-                MapConnection(..) => "black",
+                _ => "",
             };
             let inner_html = match event_type {
-                TreasureBox => "宝",
+                TreasureBox(..) => "宝",
                 Enemy => "敵",
+                Gate(..) => "",
                 Obstacle(..) => "",
-                MapConnection(..) => "black",
+                _ => "",
             };
             let class_name = match event_type {
-                TreasureBox => "treasure-box",
+                TreasureBox(..) => "treasure-box",
                 Enemy => "enemy",
+                Gate(..) => "gate",
                 Obstacle(..) => "obstacle",
-                MapConnection(..) => "map-connection",
+                _ => "",
             };
             let rect = document
                 .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "rect")
@@ -499,9 +577,16 @@ impl Map {
             rect.set_attribute("width", "40").unwrap();
             rect.set_attribute("height", "40").unwrap();
             rect.class_list().add_2("_object", class_name).unwrap();
+            match event_type {
+                Gate(..) => {
+                    rect.set_attribute("stroke", "silver").unwrap();
+                    rect.set_attribute("stroke-width", "2.5").unwrap();
+                }
+                _ => {}
+            }
             parent.append_child(&*rect).unwrap();
             match event_type {
-                TreasureBox | Enemy => {
+                TreasureBox(..) | Enemy => {
                     let text = document
                         .create_element_ns(Option::from("http://www.w3.org/2000/svg"), "text")
                         .unwrap();
@@ -518,7 +603,7 @@ impl Map {
                 _ => {}
             }
             match event_type {
-                TreasureBox => treasure_elements.push(rect),
+                TreasureBox(..) => treasure_elements.push(rect),
                 _ => {}
             }
         }
@@ -537,6 +622,11 @@ impl Map {
             from_position: Position::new(600, 240),
             to_position: Position::new(-440, -360),
         };
+        let map_connection3 = MapConnectionDetail {
+            index_addition: 3,
+            from_position: Position::new(520, -160),
+            to_position: Position::new(-440, -360),
+        };
         let event_positions = &mut vec![];
         Map::extract_events(
             event_positions,
@@ -545,13 +635,22 @@ impl Map {
         );
         Map::extract_events(
             event_positions,
-            TreasureBox,
+            TreasureBox("".to_string()),
             Position::new_vec(vec![[320, 120]]),
         );
         Map::extract_events(
             event_positions,
             Obstacle(ObstacleType::Rock),
-            Position::new_area(vec![[80, -80, 160, -40], [560, 200, 640, 240]]),
+            Position::new_area(vec![
+                [80, -80, 160, -40],
+                [560, 200, 640, 240],
+                [480, -200, 560, -160],
+            ]),
+        );
+        Map::extract_events(
+            event_positions,
+            Gate("最初の鍵".to_string()),
+            vec![Position::new(520, -160)],
         );
         Map::extract_events(
             event_positions,
@@ -583,6 +682,11 @@ impl Map {
             MapConnection(map_connection2),
             vec![map_connection2.from_position.to_owned()],
         );
+        Map::extract_events(
+            event_positions,
+            MapConnection(map_connection3),
+            vec![map_connection3.from_position.to_owned()],
+        );
         let map = Map {
             map_index: 0,
             event_positions: event_positions.to_vec(),
@@ -607,7 +711,7 @@ impl Map {
         let event_positions = &mut vec![];
         Map::extract_events(
             event_positions,
-            TreasureBox,
+            TreasureBox("最初の鍵".to_string()),
             vec![Position::new(-480, -480)],
         );
         Map::extract_events(
@@ -640,7 +744,7 @@ impl Map {
         map
     }
     fn init_3() -> Map {
-        let treasure_items = vec![];
+        let treasure_items = vec![Item::new("最初の鍵")];
         let map_connection_detail = MapConnectionDetail {
             index_addition: 2,
             from_position: Position::new(600, 240),
@@ -652,6 +756,11 @@ impl Map {
             event_positions,
             Enemy,
             Position::new_vec(vec![[-520, -1120]]),
+        );
+        Map::extract_events(
+            event_positions,
+            TreasureBox("".to_string()),
+            vec![Position::new(-480, -520)],
         );
         Map::extract_events(
             event_positions,
@@ -673,6 +782,51 @@ impl Map {
 
         let map = Map {
             map_index: 2,
+            event_positions: event_positions.to_vec(),
+            treasure_elements: vec![],
+            treasure_items,
+            ground_start_position: Position::new(-600, -1200),
+            ground_width: 320,
+            ground_height: 880,
+            ground_color: "#663300".to_string(),
+        };
+        map
+    }
+
+    fn init_4() -> Map {
+        let treasure_items = vec![];
+        let map_connection_detail = MapConnectionDetail {
+            index_addition: 3,
+            from_position: Position::new(520, -160),
+            to_position: Position::new(-440, -360),
+        }
+        .inverse();
+        let event_positions = &mut vec![];
+        Map::extract_events(
+            event_positions,
+            Enemy,
+            Position::new_vec(vec![[-520, -520]]),
+        );
+        Map::extract_events(
+            event_positions,
+            Obstacle(ObstacleType::Rock),
+            Position::new_area(vec![[-600, -1200, -320, -360]]),
+        );
+        Map::extract_events(
+            event_positions,
+            MapConnection(map_connection_detail),
+            Position::new_vec(vec![
+                [-360, -320],
+                [-400, -320],
+                [-440, -320],
+                [-480, -320],
+                [-520, -320],
+                [-560, -320],
+            ]),
+        );
+
+        let map = Map {
+            map_index: 3,
             event_positions: event_positions.to_vec(),
             treasure_elements: vec![],
             treasure_items,
@@ -777,7 +931,8 @@ impl Map {
 #[derive(Clone)]
 enum EventType {
     Enemy,
-    TreasureBox,
+    Gate(String),
+    TreasureBox(String),
     Obstacle(ObstacleType),
     MapConnection(MapConnectionDetail),
 }

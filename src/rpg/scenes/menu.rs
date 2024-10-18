@@ -183,6 +183,15 @@ impl MenuState {
                                             renderer_controller.undo_choice_tree();
                                             return;
                                         }
+                                        ItemType::Key => {
+                                            shared_state.interrupt_animations.push(vec![
+                                                Animation::create_message(
+                                                    "ここでは使用できません".to_string(),
+                                                ),
+                                            ]);
+                                            renderer_controller.undo_choice_tree();
+                                            return;
+                                        }
                                         _ => {}
                                     }
                                     let item = Item::new(
@@ -310,6 +319,20 @@ impl MenuState {
                                         return;
                                     }
                                     let index = index.unwrap();
+                                    match &rpg_shared_state.characters[0].inventory[index].item_type
+                                    {
+                                        ItemType::Key => {
+                                            shared_state.interrupt_animations.push(vec![
+                                                Animation::create_message(
+                                                    "鍵は捨てられません".to_string(),
+                                                ),
+                                            ]);
+                                            renderer_controller.undo_choice_tree();
+                                            return;
+                                        }
+                                        _ => {}
+                                    }
+
                                     let item_name = &rpg_shared_state.characters[0].inventory
                                         [index]
                                         .name
