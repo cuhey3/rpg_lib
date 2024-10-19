@@ -4,18 +4,25 @@ use crate::engine::input::Input;
 use crate::engine::scene::Scene;
 use crate::engine::state::State;
 use crate::features::animation::Animation;
+use crate::svg::element_wrapper::ElementWrapper;
 use wasm_bindgen_test::console_log;
 
 pub struct EventState {}
 
 impl EventState {
-    pub fn create_event_scene(_: &mut State) -> Scene {
+    pub fn create_event_scene(shared_state: &mut State) -> Scene {
         let event_state = EventState {};
         let consume_func = event_state.create_consume_func();
         let init_func = event_state.create_init_func();
         let scene_type = RPGEvent(event_state);
         Scene {
-            element_id: "event".to_string(),
+            own_element: ElementWrapper::new(
+                shared_state
+                    .elements
+                    .document
+                    .get_element_by_id("event")
+                    .unwrap(),
+            ),
             scene_type,
             is_partial_scene: false,
             consume_func,
@@ -27,9 +34,7 @@ impl EventState {
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
         fn init_func(scene: &mut Scene, shared_state: &mut State) {
             console_log!("init event scene");
-            // TODO
-            // 自分自身の要素をアクティブにする要素を入れる
-            shared_state.elements.event_scene.show();
+            scene.show();
             match &mut scene.scene_type {
                 RPGEvent(..) => {}
                 _ => panic!(),

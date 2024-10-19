@@ -7,11 +7,6 @@ pub mod svg_renderer;
 pub struct SharedElements {
     pub message: ElementWrapper,
     pub document: Document,
-    pub title_scene: ElementWrapper,
-    pub event_scene: ElementWrapper,
-    pub field_scene: ElementWrapper,
-    pub battle_scene: ElementWrapper,
-    pub menu_scene: ElementWrapper,
 }
 
 impl SharedElements {
@@ -20,11 +15,6 @@ impl SharedElements {
         let document = window.document().unwrap();
         SharedElements {
             message: ElementWrapper::new(document.get_element_by_id("message").unwrap()),
-            title_scene: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
-            event_scene: ElementWrapper::new(document.get_element_by_id("event").unwrap()),
-            field_scene: ElementWrapper::new(document.get_element_by_id("field").unwrap()),
-            battle_scene: ElementWrapper::new(document.get_element_by_id("battle").unwrap()),
-            menu_scene: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
             document,
         }
     }

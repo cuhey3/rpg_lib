@@ -7,6 +7,7 @@ use crate::engine::state::State;
 use crate::features::animation::{Animation, AnimationSpan};
 use crate::rpg::mechanism::choice_kind::ChoiceKind;
 use crate::rpg::mechanism::choice_kind::ChoiceKind::Root;
+use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::svg_renderer::{RendererController, SvgRenderer};
 use rand::{thread_rng, Rng};
 use web_sys::Element;
@@ -39,7 +40,13 @@ impl BattleState {
         let init_func = battle_state.create_init_func();
         let scene_type = RPGBattle(battle_state);
         Scene {
-            element_id: "battle".to_string(),
+            own_element: ElementWrapper::new(
+                shared_state
+                    .elements
+                    .document
+                    .get_element_by_id("battle")
+                    .unwrap(),
+            ),
             scene_type,
             is_partial_scene: false,
             consume_func,
@@ -51,7 +58,7 @@ impl BattleState {
 
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
         fn init_func(scene: &mut Scene, shared_state: &mut State) {
-            shared_state.elements.battle_scene.show();
+            scene.show();
             if let Scene {
                 scene_type: RPGBattle(battle_state),
                 ..

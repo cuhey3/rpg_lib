@@ -8,6 +8,7 @@ use crate::features::websocket::{ChannelMessage, MessageType};
 use crate::rpg::mechanism::item::Item;
 use crate::rpg::scenes::field::EventType::*;
 use crate::rpg::RPGSharedState;
+use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::{Position, SharedElements};
 use crate::Animation;
 use serde::{Deserialize, Serialize};
@@ -58,7 +59,13 @@ impl FieldState {
             let consume_channel_message_func = field_state.create_consume_channel_message_func();
             let scene_type = RPGField(field_state);
             Scene {
-                element_id: "field".to_string(),
+                own_element: ElementWrapper::new(
+                    shared_state
+                        .elements
+                        .document
+                        .get_element_by_id("field")
+                        .unwrap(),
+                ),
                 scene_type,
                 is_partial_scene: false,
                 consume_func,
@@ -253,6 +260,7 @@ impl FieldState {
     }
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
         fn init_func(scene: &mut Scene, shared_state: &mut State) {
+            scene.show();
             if let State {
                 state_type: StateType::RPGShared(rpg_shared_state),
                 primitives,
@@ -260,7 +268,6 @@ impl FieldState {
                 ..
             } = shared_state
             {
-                elements.field_scene.show();
                 match &mut scene.scene_type {
                     RPGField(field_state) => {
                         field_state.maps[primitives.map_index].draw(rpg_shared_state, elements);

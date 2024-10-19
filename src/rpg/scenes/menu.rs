@@ -9,6 +9,7 @@ use crate::features::emote::EmoteMessage;
 use crate::rpg::mechanism::choice_kind::ChoiceKind::*;
 use crate::rpg::mechanism::item::{Item, ItemType};
 use crate::rpg::RPGSharedState;
+use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::svg_renderer::{RendererController, SvgRenderer};
 use crate::svg::Position;
 use wasm_bindgen_test::console_log;
@@ -19,7 +20,8 @@ pub struct MenuState {
 }
 
 impl MenuState {
-    pub fn create_menu_scene(_: &mut State) -> Scene {
+    pub fn create_menu_scene(shared_state: &mut State) -> Scene {
+        let document = &shared_state.elements.document;
         let mut emotes = "👉👆👈👇👍🤨😆🤩🥺"
             .chars()
             .into_iter()
@@ -46,7 +48,7 @@ impl MenuState {
         let init_func = menu_state.create_init_func();
         let scene_type = RPGMenu(menu_state);
         Scene {
-            element_id: "menu".to_string(),
+            own_element: ElementWrapper::new(document.get_element_by_id("menu").unwrap()),
             scene_type,
             is_partial_scene: true,
             consume_func,
@@ -57,8 +59,8 @@ impl MenuState {
     }
 
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
-        fn init_func(scene: &mut Scene, shared_state: &mut State) {
-            shared_state.elements.menu_scene.show();
+        fn init_func(scene: &mut Scene, _: &mut State) {
+            scene.show();
             if let Scene {
                 scene_type: RPGMenu(menu_state),
                 ..

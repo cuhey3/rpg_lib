@@ -5,6 +5,7 @@ use crate::engine::scene::Scene;
 use crate::engine::state::State;
 use crate::features::animation::Animation;
 use crate::rpg::RPGSharedState;
+use crate::svg::element_wrapper::ElementWrapper;
 use crate::svg::svg_renderer::Cursor;
 
 pub struct TitleState {
@@ -21,7 +22,7 @@ impl TitleState {
         let init_func = title_state.create_init_func();
         let scene_type = RPGTitle(title_state);
         Scene {
-            element_id: "title".to_string(),
+            own_element: ElementWrapper::new(document.get_element_by_id("title").unwrap()),
             scene_type,
             is_partial_scene: false,
             consume_func,
@@ -31,12 +32,8 @@ impl TitleState {
         }
     }
     pub fn create_init_func(&self) -> fn(&mut Scene, &mut State) {
-        fn init_func(scene: &mut Scene, shared_state: &mut State) {
-            shared_state.elements.title_scene.show();
-            match &mut scene.scene_type {
-                RPGTitle(..) => {}
-                _ => panic!(),
-            }
+        fn init_func(scene: &mut Scene, _: &mut State) {
+            scene.show();
         }
         init_func
     }
